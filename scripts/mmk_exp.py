@@ -17,6 +17,13 @@ class Vertex(object):
         self.y = y
         self.z = z
         
+    def __eq__(self, other):
+        return (isinstance(other, self.__class__) and self.x == other.x and 
+                self.y == other.y and self.z == other.z)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+        
 class MMKGraphItem(object):
     def __init__(self, itemUUID, osm_id):
         self.UUID = itemUUID
@@ -25,10 +32,10 @@ class MMKGraphItem(object):
         self.pred = []
         self.succ = []
         
-    def appendPred(pred):
+    def appendPred(self, pred):
         self.pred.append(pred)
     
-    def appendSucc(succ):
+    def appendSucc(self, succ):
         self.succ.append(succ)
         
     def appendVertex(self, x, y, z):
@@ -63,15 +70,16 @@ class CoordiantesConvertor(object):
         
     def to_latlon(self, easting, northing):
         return utm.to_latlon(abs(easting), abs(northing), self.zoneNumber, northern=self.northern)
-  
+
+def isRoad(segment):
+    highway = ce.getAttribute(segment, 'highway')
+    return highway in ['residential', 'motorway', 'primary', 'secondary', 'road']
+        
 def parseSegments(segments):
     items = []
+    
     for segment in segments:
-        if (ce.getAttribute(segment, 'highway') == 'residential' or
-            ce.getAttribute(segment, 'highway') == 'secondary' or
-            ce.getAttribute(segment, 'highway') == 'primary' or
-            ce.getAttribute(segment, 'highway') == 'motorway'):
-            
+        if isRoad(segment):
             item = MMKGraphItem(ce.getOID(segment), ce.getAttribute(segment, 'osm_id'))
             verticesList=ce.getVertices(segment)
             
@@ -95,17 +103,17 @@ def parseSegments(segments):
         # OSM format guarantees 2 nodes per valid way element
         firstNode = nodes[0].get('ref')
         lastNode = nodes[-1].get('ref')
-        
+
         # Collect the two endpoints
         wayEndpoints[item.osm_id] = (firstNode, lastNode)
     
     for i in xrange(0, len(items)):
         for j in xrange(i+1, len(items)):
-            #
-            if ((items[i].vertices[0].x == items[j].vertices[0].x and items[i].vertices[0].y == items[j].vertices[0].y and
-                items[i].vertices[0].z == items[j].vertices[0].z) or
-                (items[i].vertices[1].x == items[j].vertices[1].x and items[i].vertices[1].y == items[j].vertices[1].y and
-                items[i].vertices[1].z == items[j].vertices[1].z)):
+            # Check whether the two segments have at least one common vertex
+            if (items[i].vertices[0] == items[j].vertices[0] or
+                items[i].vertices[0] == items[j].vertices[1] or
+                items[i].vertices[1] == items[j].vertices[0] or
+                items[i].vertices[1] == items[j].vertices[1]):
                 
                 firstEndPoints = wayEndpoints.get(items[i].osm_id, None)
                 secondEndPoints = wayEndpoints.get(items[j].osm_id, None)
@@ -118,8 +126,8 @@ def parseSegments(segments):
                     items[i].appendPred(items[j].osm_id)
                     items[j].appendSucc(items[i].osm_id)
                 elif wayEndpoints[items[i].osm_id][1] == wayEndpoints[items[j].osm_id][0]:
-                    items[i].appendSucc(items[j].osm_id)
                     items[j].appendPred(items[i].osm_id)
+                    items[i].appendSucc(items[j].osm_id)
                 else:
                     print('Error: Segments are not neighbours in map world!')
               
