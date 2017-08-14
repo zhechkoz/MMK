@@ -71,13 +71,29 @@ class CoordiantesConvertor(object):
     def to_latlon(self, easting, northing):
         return utm.to_latlon(abs(easting), abs(northing), self.zoneNumber, northern=self.northern)
 
+def simplify(segments):
+	toSimplify = {}
+
+	for segment in segments:
+        if isRoad(segment):
+            osm_id = ce.getAttribute(segment, 'osm_id')
+            toSimplify[osm_id] = toSimplify.get(osm_id, []) + [segment]
+
+	filteredToSimplify = [(osm_id, segs) for (osm_id, segs) in toSimplify if len(segs) > 1]
+
+	for (osm_id, segs) in filteredToSimplify:
+        combinedShape = ce.combineShapes(segs)
+        ce.setAttribute(combinedShape, 'osm_id', osm_id)
+		
+
 def isRoad(segment):
     highway = ce.getAttribute(segment, 'highway')
     return highway in ['residential', 'motorway', 'primary', 'secondary', 'road']
         
 def parseSegments(segments):
+    simplify(segments)
+
     items = []
-    
     for segment in segments:
         if isRoad(segment):
             item = MMKGraphItem(ce.getOID(segment), ce.getAttribute(segment, 'osm_id'))
@@ -87,7 +103,7 @@ def parseSegments(segments):
                 item.appendVertex(verticesList[i], verticesList[i+1], verticesList[i+2]) 
             
             items.append(item)
-            
+
     osm = ET.parse('C:\\Users\\Zhechev\\Documents\\IDP\\MMK\\scripts\\tum.osm')
     wayEndpoints = {}
     
