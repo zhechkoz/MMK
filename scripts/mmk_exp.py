@@ -11,6 +11,18 @@ import utm
 # get a CityEngine instance
 ce = CE()
 
+# Define bounding box
+bbminx = 690370.0
+bbmaxx = 691600.0
+bbminz = 5335624.0
+bbmaxz = 5336828.0
+
+# Define center coordinates
+ox = 690985
+oz = 5336220
+
+roads = ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary','secondary_link', 'tertiary', 'tertiary_link', 'unclassified', 'residential', 'living_street', 'unsurfaced']
+
 class Vertex(object):
     def __init__(self, x, y, z):
         self.x = x
@@ -48,7 +60,7 @@ class MMKGraphItem(object):
     def __repr__(self):
         return str(self.osm_id) + ', ' + str(self.pred) + ', ' + str(self.succ)
 
-class CoordiantesConvertor(object):
+class CoordinatesConvertor(object):
     def __init__(self):
         (authAndCode, _) = ce.getSceneCoordSystem()
         
@@ -69,98 +81,56 @@ class CoordiantesConvertor(object):
         return utm.from_latlon(lat, lon)
         
     def to_latlon(self, easting, northing):
-        return utm.to_latlon(abs(easting), abs(northing), self.zoneNumber, northern=self.northern)
+        return utm.to_latlon(abs(easting), abs(northing), self.zoneNumber, northern=self.northern)        
 
-def simplify(segments):
-	toSimplify = {}
+def clipRegion(ce):
+    # Remove any other layers created
+    layers = ce.getObjectsFrom(ce.scene, ce.isLayer, ce.isGraphLayer, ce.withName('osm graph'))
+    for layer in layers:
+        if not ce.isGraphLayer(layer):
+            ce.delete(layer)
 
-	for segment in segments:
-        if isRoad(segment):
-            osm_id = ce.getAttribute(segment, 'osm_id')
-            toSimplify[osm_id] = toSimplify.get(osm_id, []) + [segment]
-
-	filteredToSimplify = [(osm_id, segs) for (osm_id, segs) in toSimplify if len(segs) > 1]
-
-	for (osm_id, segs) in filteredToSimplify:
-        combinedShape = ce.combineShapes(segs)
-        ce.setAttribute(combinedShape, 'osm_id', osm_id)
-		
-
-def isRoad(segment):
-    highway = ce.getAttribute(segment, 'highway')
-    return highway in ['residential', 'motorway', 'primary', 'secondary', 'road']
-        
-def parseSegments(segments):
-    simplify(segments)
-
-    items = []
+    maxx = bbmaxx
+    minx = bbminx
+    minz = -bbminz
+    maxz = -bbmaxz
+    
+    segments = ce.getObjectsFrom(ce.scene, ce.isGraphSegment)
     for segment in segments:
-        if isRoad(segment):
-            item = MMKGraphItem(ce.getOID(segment), ce.getAttribute(segment, 'osm_id'))
-            verticesList=ce.getVertices(segment)
-            
-            for i in xrange(0, (len(verticesList)-1),3):
-                item.appendVertex(verticesList[i], verticesList[i+1], verticesList[i+2]) 
-            
-            items.append(item)
-
-    osm = ET.parse('C:\\Users\\Zhechev\\Documents\\IDP\\MMK\\scripts\\tum.osm')
-    wayEndpoints = {}
-    
-    for item in items:
-        way = osm.find("./way[@id='" + str(item.osm_id) + "']")
-        if way == None:
-            print('Warning: ' + str(item.osm_id) + ' is not valid and will be omitted!')
+        segmentVerteces = ce.getVertices(segment)
+        endVerteces = []
+        
+        for i in xrange(0, len(segmentVerteces), 3):
+            vertex = Vertex(segmentVerteces[i], segmentVerteces[i+1], segmentVerteces[i+2])
+            endVerteces.append(vertex)
+        
+        if len(endVerteces) < 2:
+            ce.delete(segment)
             continue
+        
+        highway = ce.getAttribute(segment, 'highway')
+        if highway == None or not (highway in roads):
+            ce.delete(segment)
+            continue
+        
+        for vertex in endVerteces:
+            if (vertex.x < minx or vertex.x > maxx or
+                vertex.z > minz or vertex.z < maxz):
+                ce.delete(segment)
+                break
 
-        # Find all nodes in the current way
-        nodes = way.findall('nd')
-       
-        # OSM format guarantees 2 nodes per valid way element
-        firstNode = nodes[0].get('ref')
-        lastNode = nodes[-1].get('ref')
-
-        # Collect the two endpoints
-        wayEndpoints[item.osm_id] = (firstNode, lastNode)
-    
-    for i in xrange(0, len(items)):
-        for j in xrange(i+1, len(items)):
-            # Check whether the two segments have at least one common vertex
-            if (items[i].vertices[0] == items[j].vertices[0] or
-                items[i].vertices[0] == items[j].vertices[1] or
-                items[i].vertices[1] == items[j].vertices[0] or
-                items[i].vertices[1] == items[j].vertices[1]):
-                
-                firstEndPoints = wayEndpoints.get(items[i].osm_id, None)
-                secondEndPoints = wayEndpoints.get(items[j].osm_id, None)
-                
-                if not firstEndPoints or not secondEndPoints:
-                    print('Error: No data about segment ' + str(items[i].osm_id) + ' or ' + str(items[j].osm_id))
-                    continue
-                
-                if wayEndpoints[items[i].osm_id][0] == wayEndpoints[items[j].osm_id][1]:
-                    items[i].appendPred(items[j].osm_id)
-                    items[j].appendSucc(items[i].osm_id)
-                elif wayEndpoints[items[i].osm_id][1] == wayEndpoints[items[j].osm_id][0]:
-                    items[j].appendPred(items[i].osm_id)
-                    items[i].appendSucc(items[j].osm_id)
-                else:
-                    print('Error: Segments are not neighbours in map world!')
-              
-    print(items)           
-   
 if __name__ == '__main__':
-    cc = CoordiantesConvertor()
-    
-    nodes = ce.getObjectsFrom(ce.scene, ce.isGraphSegment)
-    parseSegments(nodes) # Pass all segments
-
+    clipRegion(ce)
     '''
+    cc = CoordinatesConvertor()
+    
     luis = ce.findByOID('3d39f005-20a5-11b2-a9aa-00e8564141bb')
     print(ce.getPosition([ce.findByOID('3d39f005-20a5-11b2-a9aa-00e8564141bb:2'), ce.findByOID('3d39f005-20a5-11b2-a9aa-00e8564141bb:1'), ce.findByOID('3d39f005-20a5-11b2-a9aa-00e8564141bb:0')]))
     osm_id = ce.getAttribute(luis, 'osm_id ')
     print("The OSM is " + str(osm_id))
-    #vertex = ce.getVertices(luis)
-    #print(cc.to_latlon(vertex[0], -vertex[2]))
+    vertex = ce.getVertices(luis)
+    print(cc.to_latlon(vertex[0], -vertex[2]))
+    
+    print(ce.getObjectsFrom(ce.findByOID('7fbbe827-1fdd-11b2-8655-00e8564141bb'), ce.isGraphNode))
     '''
     print("Finished")
