@@ -11,18 +11,8 @@ import utm
 # get a CityEngine instance
 ce = CE()
 
-# Define bounding box
-bbminx = 690370.0
-bbmaxx = 691600.0
-bbminz = 5335624.0
-bbmaxz = 5336828.0
-
-# Define center coordinates
-ox = 690985
-oz = 5336220
-
-# Define roads which can be used by a car
-roads = ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary','secondary_link', 'tertiary', 'tertiary_link', 'unclassified', 'residential', 'living_street', 'unsurfaced']
+sys.path.append(ce.toFSPath('scripts'))
+import mmk_config as config
 
 # Define cleanup settings which preserve osm meta data
 cleanupSettings = CleanupGraphSettings()
@@ -93,17 +83,17 @@ class CoordinatesConvertor(object):
     def to_latlon(self, easting, northing):
         return utm.to_latlon(abs(easting), abs(northing), self.zoneNumber, northern=self.northern)        
 
-def clipRegion(ce):
+def clipRegion(ce, config):
     # Remove any other layers created
     layers = ce.getObjectsFrom(ce.scene, ce.isLayer, ce.isGraphLayer, ce.withName('osm graph'))
     for layer in layers:
         if not ce.isGraphLayer(layer):
             ce.delete(layer)
 
-    maxx = bbmaxx
-    minx = bbminx
-    maxz = -bbmaxz
-    minz = -bbminz
+    maxx = config.bbmaxx
+    minx = config.bbminx
+    maxz = -config.bbmaxz
+    minz = -config.bbminz
     
     segments = ce.getObjectsFrom(ce.scene, ce.isGraphSegment)
     for segment in segments:    
@@ -119,7 +109,7 @@ def clipRegion(ce):
             continue
         
         highway = ce.getAttribute(segment, 'highway')
-        if highway == None or not (highway in roads):
+        if highway == None or not (highway in config.roads):
             ce.delete(segment)
             continue
         
@@ -129,12 +119,29 @@ def clipRegion(ce):
                 ce.delete(segment)
                 break
 
+def attributeSegments(ce, config):
+    segments = ce.getObjectsFrom(ce.scene, ce.isGraphSegment)
+    
+    for segment in segments:
+        highway = ce.getAttribute(segment, 'highway')
+        maxspeed = ce.getAttribute(segment, 'maxspeed')
+        
+        if maxspeed == None:
+            print("max spee")
+            if highway != None and highway in config.roads :
+                maxspeed = config.roads[highway].maxspeed
+            else :
+                maxspeed = 50
+            ce.setAttribute(segment, 'maxspeed', maxspeed)
+
+def resolveNeighbours(ce):
+    pass
+            
 def cleanupGraph(ce, cleanupSettings):
     graphlayer = ce.getObjectsFrom(ce.scene, ce.isGraphLayer)
     ce.cleanupGraph(graphlayer, cleanupSettings)
     
 if __name__ == '__main__':
-    
     print('Cleaning up old imports...')
     
     # Delete all old layers
@@ -149,9 +156,12 @@ if __name__ == '__main__':
         ce.setName(graphLayer, 'osm graph')
     
     # Delete not drivable roads and roads outside of the specified bounding box and cleanup
-    clipRegion(ce)
+    clipRegion(ce, config)
     cleanupGraph(ce, cleanupSettings)
+
+    attributeSegments(ce, config)
     
+    resolveNeighbours(ce)
     
     '''
     cc = CoordinatesConvertor()
