@@ -21,8 +21,18 @@ bbmaxz = 5336828.0
 ox = 690985
 oz = 5336220
 
+# Define roads which can be used by a car
 roads = ['motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link', 'secondary','secondary_link', 'tertiary', 'tertiary_link', 'unclassified', 'residential', 'living_street', 'unsurfaced']
 
+# Define cleanup settings which preserve osm meta data
+cleanupSettings = CleanupGraphSettings()
+cleanupSettings.setIntersectSegments(False)
+cleanupSettings.setMergeNodes(False)
+cleanupSettings.setSnapNodesToSegments(False)
+cleanupSettings.setResolveConflictShapes(True)
+
+osmSettings = OSMImportSettings()
+    
 class Vertex(object):
     def __init__(self, x, y, z):
         self.x = x
@@ -92,18 +102,18 @@ def clipRegion(ce):
 
     maxx = bbmaxx
     minx = bbminx
-    minz = -bbminz
     maxz = -bbmaxz
+    minz = -bbminz
     
     segments = ce.getObjectsFrom(ce.scene, ce.isGraphSegment)
-    for segment in segments:
+    for segment in segments:    
         segmentVerteces = ce.getVertices(segment)
         endVerteces = []
         
         for i in xrange(0, len(segmentVerteces), 3):
             vertex = Vertex(segmentVerteces[i], segmentVerteces[i+1], segmentVerteces[i+2])
             endVerteces.append(vertex)
-        
+
         if len(endVerteces) < 2:
             ce.delete(segment)
             continue
@@ -119,8 +129,30 @@ def clipRegion(ce):
                 ce.delete(segment)
                 break
 
+def cleanupGraph(ce, cleanupSettings):
+    graphlayer = ce.getObjectsFrom(ce.scene, ce.isGraphLayer)
+    ce.cleanupGraph(graphlayer, cleanupSettings)
+    
 if __name__ == '__main__':
+    
+    print('Cleaning up old imports...')
+    
+    # Delete all old layers
+    layers = ce.getObjectsFrom(ce.scene, ce.isLayer, ce.withName("'osm graph'"))
+    ce.delete(layers)
+    
+    print('Import osm map...')
+    # Import osm map
+    graphLayers = ce.importFile(ce.toFSPath('data/tum.osm'), osmSettings, False )
+        
+    for graphLayer in graphLayers :
+        ce.setName(graphLayer, 'osm graph')
+    
+    # Delete not drivable roads and roads outside of the specified bounding box and cleanup
     clipRegion(ce)
+    cleanupGraph(ce, cleanupSettings)
+    
+    
     '''
     cc = CoordinatesConvertor()
     
@@ -133,4 +165,4 @@ if __name__ == '__main__':
     
     print(ce.getObjectsFrom(ce.findByOID('7fbbe827-1fdd-11b2-8655-00e8564141bb'), ce.isGraphNode))
     '''
-    print("Finished")
+    print("Done")
