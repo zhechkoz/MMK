@@ -35,22 +35,21 @@ class Vertex(object):
 
     def __ne__(self, other):
         return not self.__eq__(other)
-        
+
 class MMKGraphItem(object):
-    def __init__(self, itemUUID, osm_id):
+    def __init__(self, itemUUID):
         self.UUID = itemUUID
-        self.osm_id = int(osm_id)
         self.vertices = []
-        
+
     def appendVertex(self, x, y, z):
         vertex = Vertex(x, y, z)
-        self.vertices.append(vertex)
+        self.vertices.append(vertex)  
+
+class MMKGraphNode(MMKGraphItem):
+    pass
     
-    def __str__(self):
-        __repr__()
-        
-    def __repr__(self):
-        return str(self.osm_id) + ', ' + str(self.pred) + ', ' + str(self.succ)
+class MMKGraphSegment(MMKGraphItem):
+    pass
 
 class CoordinatesConvertor(object):
     def __init__(self):
@@ -174,7 +173,55 @@ def attributeNodes(ce, config):
                     ce.setAttribute(node, 'type', config.roads[maxType].samePriority)
                 else:
                     ce.setAttribute(node, 'type', config.roads[maxType].differentPriority)
+
+def exportStreetnetworkData(ce):
+    nodes = ce.getObjectsFrom(ce.scene, ce.isGraphNode)
+    
+    graphNodes = []
+    graphSegments = []
+    
+    for node in nodes:
+        type = ce.getAttribute(node, 'type')
+        segments = ce.getObjectsFrom(node, ce.isGraphSegment)
+        
+        if len(segments) <= 0 or type == 'merge':
+            continue
+            
+        graphNodes.append(MMKGraphNode(node)) 
+        for segment in segments:
+            finished = ce.getAttribute(segment, 'finished')
+            if finished != None and finished == 'true':
+                continue
+            
+            oneway = ce.getAttribute(segment, 'oneway') == 'yes'
+            
+            nextSegment = segment
+            nextNode = node
+            while True:
+                ce.setAttribute(nextSegment, 'finished', 'true')
+                segmentsNodes = ce.getObjectsFrom(nextSegment, ce.isGraphNode)
                 
+                if len(segmentsNodes) < 2:
+                    raise Exception('The segment ' + ce.getOID(nextSegment) +' was not valid!')
+                
+                # Take the next node
+                if ce.getOID(nextNode) == ce.getOID(segmentsNodes[0]): 
+                    nextNode = segmentsNodes[1]
+                else:
+                    nextNode = segmentsNodes[0]
+                
+                # This is already a real junction
+                if ce.getAttribute(nextNode, 'type') != 'merge':
+                    break
+                
+                newSegments = ce.getObjectsFrom(nextNode, ce.isGraphSegment)
+                
+                # Take the next segment
+                if ce.getOID(nextSegment) == ce.getOID(newSegments[0]): 
+                    nextSegment = newSegments[1]
+                else:
+                    nextSegment = newSegments[0]    
+                    
 def cleanupGraph(ce, cleanupSettings):
     graphlayer = ce.getObjectsFrom(ce.scene, ce.isGraphLayer)
     ce.cleanupGraph(graphlayer, cleanupSettings)
@@ -204,6 +251,10 @@ if __name__ == '__main__':
     # Make sure all nodes and segments have correct attributes
     attributeSegments(ce, config)
     attributeNodes(ce, config)
+    
+    print('Exporting network...')
+    
+    exportStreetnetworkData(ce)
 
     '''
     cc = CoordinatesConvertor()
@@ -214,7 +265,7 @@ if __name__ == '__main__':
     print("The OSM is " + str(osm_id))
     vertex = ce.getVertices(luis)
     print(cc.to_latlon(vertex[0], -vertex[2]))
-   
-    print(ce.getObjectsFrom(ce.findByOID('8db5030b-25bf-11b2-9c1e-00e8564141bb'), ce.isGraphSegment))
+    
+    print(ce.getObjectsFrom(ce.findByOID('e0f15792-2342-11b2-806f-00e8564141bb'), ce.isGraphNode))
     '''
     print("Done")
