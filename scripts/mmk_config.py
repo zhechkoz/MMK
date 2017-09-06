@@ -9,22 +9,26 @@ ox = 690985
 oz = 5336220
 
 class Road(object):
-    def __init__(self, maxspeed):
+    def __init__(self, priority, maxspeed, lanes, samePriority, differentPriority):
+        self.priority = priority
         self.maxspeed = maxspeed
+        self.lanes = lanes
+        self.samePriority = samePriority
+        self.differentPriority = differentPriority
       
 # Roads which can be used by a car
 roads = {}
-roads['motorway'] = Road(130)
-roads['motorway_link'] = Road(70)
-roads['trunk'] = Road(90)
-roads['trunk_link'] = Road(70)
-roads['primary'] = Road(50)
-roads['primary_link'] = Road(50)
-roads['secondary'] = Road(50)
-roads['secondary_link'] = Road(50)
-roads['tertiary'] = Road(50)
-roads['tertiary_link'] = Road(50)
-roads['unclassified'] = Road(50)
-roads['residential'] = Road(30)
-roads['living_street'] = Road(25)
-roads['unsurfaced'] = Road(20)
+roads['motorway'] = Road(1, 130, 6, 'traffic_signals', 'traffic_signals')
+roads['motorway_link'] = Road(2, 70, 4, 'traffic_signals', 'stop_sign')
+roads['trunk'] = Road(3, 90, 4, 'traffic_signals', 'stop_sign')
+roads['trunk_link'] = Road(4, 70, 4, 'traffic_signals', 'stop_sign')
+roads['primary'] = Road(5, 50, 4, 'traffic_signals', 'stop_sign')
+roads['primary_link'] = Road(6 ,50, 4, 'traffic_signals', 'stop_sign')
+roads['secondary'] = Road(7, 50, 4, 'traffic_signals', 'stop_sign')
+roads['secondary_link'] = Road(8, 50, 4, 'traffic_signals', 'stop_sign')
+roads['tertiary'] = Road(9, 50, 2, 'no_sign', 'stop_sign')
+roads['tertiary_link'] = Road(10, 50, 2, 'no_sign', 'stop_sign')
+roads['unclassified'] = Road(11, 50, 2, 'no_sign', 'stop_sign')
+roads['residential'] = Road(12, 50, 2, 'no_sign', 'stop_sign')
+roads['living_street'] = Road(13, 25, 2, 'no_sign', 'stop_sign')
+roads['unsurfaced'] = Road(14, 20, 2, 'no_sign', 'stop_sign')

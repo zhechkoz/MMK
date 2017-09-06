@@ -41,14 +41,6 @@ class MMKGraphItem(object):
         self.UUID = itemUUID
         self.osm_id = int(osm_id)
         self.vertices = []
-        self.pred = []
-        self.succ = []
-        
-    def appendPred(self, pred):
-        self.pred.append(pred)
-    
-    def appendSucc(self, succ):
-        self.succ.append(succ)
         
     def appendVertex(self, x, y, z):
         vertex = Vertex(x, y, z)
@@ -125,30 +117,78 @@ def attributeSegments(ce, config):
     for segment in segments:
         highway = ce.getAttribute(segment, 'highway')
         maxspeed = ce.getAttribute(segment, 'maxspeed')
+        lanes = ce.getAttribute(segment, 'lanes')
         
-        if maxspeed == None:
-            print("max spee")
-            if highway != None and highway in config.roads :
-                maxspeed = config.roads[highway].maxspeed
-            else :
-                maxspeed = 50
+        if highway == None:
+            ce.setAttribute(segment, 'highway', 'residential')
+        
+        if maxspeed == None or maxspeed <= 0:
+            maxspeed = config.roads[highway].maxspeed
             ce.setAttribute(segment, 'maxspeed', maxspeed)
-
-def resolveNeighbours(ce):
-    pass
-            
+        
+        if lanes == None or lanes <= 0:
+            lanes = config.roads[highway].lanes
+            ce.setAttribute(segment, 'lanes', lanes)
+                
+def attributeNodes(ce, config):
+    nodes = ce.getObjectsFrom(ce.scene, ce.isGraphNode)
+    
+    for node in nodes:
+        # Get neighbour segments
+        segments = ce.getObjectsFrom(node, ce.isGraphSegment)
+        segmentsCount = len(segments)
+        
+        if segmentsCount == 1:
+            # Reached an end node
+            ce.setAttribute(node, 'type', 'end')
+        elif segmentsCount == 2:
+            # Two streets connecting: If they are the same type we can merge them;
+            # otherwise it will be a (not-real-)junction with no signals 
+            if (ce.getAttribute(segments[0], 'lanes') == ce.getAttribute(segments[1], 'lanes') and
+                ce.getAttribute(segments[0], 'maxspeed') == ce.getAttribute(segments[1], 'maxspeed') and
+                ce.getAttribute(segments[0], 'highway') == ce.getAttribute(segments[1], 'highway')):
+                ce.setAttribute(node, 'type', 'merge')
+            else:
+                ce.setAttribute(node, 'type', 'connect')
+        else:
+            # Ordinary junction - try to determine the signals
+            if ce.getAttribute(node, 'highway') == 'traffic_signals':
+                ce.setAttribute(node, 'type', 'traffic_lights')
+                continue
+            elif ce.getAttribute(node, 'highway') == 'stop':
+                ce.setAttribute(node, 'type', 'stop_sign')
+                continue
+            else:
+                types = set()
+                maxPriority = 0
+                maxType = 'residential'
+                for segment in segments:
+                    highway = ce.getAttribute(segment, 'highway')
+                    types.add(highway)
+                    priority = config.roads[highway].priority
+                    if priority > maxPriority:
+                        maxPriority = priority
+                        maxType = highway
+                       
+                if len(types) == 1: # only same-priority ways
+                    ce.setAttribute(node, 'type', config.roads[maxType].samePriority)
+                else:
+                    ce.setAttribute(node, 'type', config.roads[maxType].differentPriority)
+                
 def cleanupGraph(ce, cleanupSettings):
     graphlayer = ce.getObjectsFrom(ce.scene, ce.isGraphLayer)
     ce.cleanupGraph(graphlayer, cleanupSettings)
     
 if __name__ == '__main__':
+    
     print('Cleaning up old imports...')
     
     # Delete all old layers
     layers = ce.getObjectsFrom(ce.scene, ce.isLayer, ce.withName("'osm graph'"))
     ce.delete(layers)
     
-    print('Import osm map...')
+    print('Import OSM data...')
+    
     # Import osm map
     graphLayers = ce.importFile(ce.toFSPath('data/tum.osm'), osmSettings, False )
         
@@ -158,11 +198,13 @@ if __name__ == '__main__':
     # Delete not drivable roads and roads outside of the specified bounding box and cleanup
     clipRegion(ce, config)
     cleanupGraph(ce, cleanupSettings)
-
+    
+    print('Attributing segments and nodes...')
+    
+    # Make sure all nodes and segments have correct attributes
     attributeSegments(ce, config)
-    
-    resolveNeighbours(ce)
-    
+    attributeNodes(ce, config)
+
     '''
     cc = CoordinatesConvertor()
     
@@ -172,7 +214,7 @@ if __name__ == '__main__':
     print("The OSM is " + str(osm_id))
     vertex = ce.getVertices(luis)
     print(cc.to_latlon(vertex[0], -vertex[2]))
-    
-    print(ce.getObjectsFrom(ce.findByOID('7fbbe827-1fdd-11b2-8655-00e8564141bb'), ce.isGraphNode))
+   
+    print(ce.getObjectsFrom(ce.findByOID('8db5030b-25bf-11b2-9c1e-00e8564141bb'), ce.isGraphSegment))
     '''
     print("Done")
