@@ -52,7 +52,17 @@ class MMKGraphItem(object):
 
     def appendVertex(self, x, y, z):
         vertex = Vertex(x, y, z)
-        self.vertices.append(vertex)  
+        self.vertices.append(vertex)
+        
+    def decodeAndAppendVertices(self, verticesList):
+        for i in xrange(0,(len(verticesList)-1),3):
+            self.appendVertex(verticesList[i], verticesList[i+1], verticesList[i+2])
+    
+    def __repr__(self):
+        return self.OID + ' - positions: ' + str(self.vertices)        
+    
+    def __str__(self):
+        __repr__()
 
 class MMKGraphNode(object):
     def __init__(self, itemOID, shapes, vertex, type):
@@ -62,7 +72,7 @@ class MMKGraphNode(object):
         self.type = type
 
     def __repr__(self):
-        return self.OID + ' - position: ' + str(self.vertex)        
+        return self.OID + ' - position: ' + str(self.vertex) + str(self.shapes)        
     
     def __str__(self):
         __repr__()
@@ -208,6 +218,17 @@ def attributeNodes(ce, config):
                 else:
                     ce.setAttribute(node, 'type', config.roads[maxType].differentPriority)
 
+def getShapes(element):
+    shapes = ce.getObjectsFrom(element, ce.isShape)
+    items = []
+    
+    for shape in shapes:
+        item = MMKGraphItem(ce.getOID(shape))
+        item.decodeAndAppendVertices(ce.getVertices(shape))
+        items.append(item)
+    
+    return items    
+                    
 def exportStreetnetworkData(ce):
     nodes = ce.getObjectsFrom(ce.scene, ce.isGraphNode)
     
@@ -220,8 +241,9 @@ def exportStreetnetworkData(ce):
         
         if len(segments) <= 0 or type == 'merge':
             continue
-            
-        graphNodes.append(MMKGraphNode(ce.getOID(node), [], ce.getPosition(node), ce.getAttribute(node ,'type'))) 
+        
+        nodesShapes = getShapes(node)
+        graphNodes.append(MMKGraphNode(ce.getOID(node), nodesShapes, ce.getPosition(node), ce.getAttribute(node ,'type'))) 
         for segment in segments:
             finished = ce.getAttribute(segment, 'finished')
             if finished != None and finished == 'true':
@@ -232,6 +254,7 @@ def exportStreetnetworkData(ce):
             lanes = ce.getAttribute(segment, 'lanes')
             lanesBack = ce.getAttribute(segment, 'lanes:backward')
             lanesForw = ce.getAttribute(segment, 'lanes:forward')
+            shapes = []
             distance = 0
             
             nextSegment = segment
@@ -242,6 +265,8 @@ def exportStreetnetworkData(ce):
                 
                 if len(segmentsNodes) < 2:
                     raise Exception('The segment ' + ce.getOID(nextSegment) + ' was not valid!')
+                
+                shapes += getShapes(nextSegment)
                 
                 oldNode = nextNode
                 
@@ -284,7 +309,7 @@ def exportStreetnetworkData(ce):
                     lanes = int(lanes) / 2
             
             # Add segment from start to end
-            edge = MMKGraphSegment(ce.getOID(segment)+':a', ce.getOID(start), ce.getOID(end), distance, lanes, maxspeed, [])
+            edge = MMKGraphSegment(ce.getOID(segment)+':a', ce.getOID(start), ce.getOID(end), distance, lanes, maxspeed, shapes)
             graphSegments.append(edge)
             
             if not oneway:
@@ -292,7 +317,7 @@ def exportStreetnetworkData(ce):
                     lanes = lanesBack
                 
                 # Add segment from end to start
-                edge = MMKGraphSegment(ce.getOID(segment)+':b', ce.getOID(end), ce.getOID(start), distance, lanes, maxspeed, [])
+                edge = MMKGraphSegment(ce.getOID(segment)+':b', ce.getOID(end), ce.getOID(start), distance, lanes, maxspeed, shapes)
                 graphSegments.append(edge)
 
     print(graphNodes)
