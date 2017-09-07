@@ -1,11 +1,11 @@
 '''
 Created on Apr 23, 2017
 
-@author: Zhechev
+@author: Zhechko Zhechev
 '''
 from scripting import *
 import sys
-import xml.etree.cElementTree as ET
+import math
 import utm
 
 # get a CityEngine instance
@@ -22,6 +22,15 @@ cleanupSettings.setSnapNodesToSegments(False)
 cleanupSettings.setResolveConflictShapes(True)
 
 osmSettings = OSMImportSettings()
+
+@noUIupdate
+def nodeDistance(first, second) :
+    posA = ce.getPosition(first)
+    posB = ce.getPosition(second)
+    dx =  posA[0]-posB[0]
+    dy =  posA[1]-posB[1]
+    dz =  posA[2]-posB[2]
+    return math.sqrt(dx**2 + dy**2 + dz**2)
     
 class Vertex(object):
     def __init__(self, x, y, z):
@@ -37,19 +46,42 @@ class Vertex(object):
         return not self.__eq__(other)
 
 class MMKGraphItem(object):
-    def __init__(self, itemUUID):
-        self.UUID = itemUUID
+    def __init__(self, itemOID):
+        self.OID = itemOID
         self.vertices = []
 
     def appendVertex(self, x, y, z):
         vertex = Vertex(x, y, z)
         self.vertices.append(vertex)  
 
-class MMKGraphNode(MMKGraphItem):
-    pass
+class MMKGraphNode(object):
+    def __init__(self, itemOID, shapes, vertex, type):
+        self.OID = itemOID
+        self.shapes = shapes
+        self.vertex = vertex
+        self.type = type
+
+    def __repr__(self):
+        return self.OID + ' - position: ' + str(self.vertex)        
     
-class MMKGraphSegment(MMKGraphItem):
-    pass
+    def __str__(self):
+        __repr__()
+    
+class MMKGraphSegment(object):
+    def __init__(self, itemOID, fromNode, toNode, distance, lanes, maxspeed, shapes):
+        self.OID = itemOID
+        self.fromNode = fromNode
+        self.toNode = toNode
+        self.distance = distance
+        self.lanes = lanes
+        self.maxspeed = maxspeed
+        self.shapes = shapes
+    
+    def __repr__(self):
+        return self.OID + ' - from: ' + self.fromNode + ' to: ' + self.toNode + ' with distance: ' + str(self.distance) + ' and lanes: ' + str(self.lanes) 
+    
+    def __str__(self):
+        __repr__()
 
 class CoordinatesConvertor(object):
     def __init__(self):
@@ -120,6 +152,8 @@ def attributeSegments(ce, config):
         
         if highway == None:
             ce.setAttribute(segment, 'highway', 'residential')
+        elif not (highway in config.roads):
+            raise Exception('Road \''+ highway + '\'not recognosed!')
         
         if maxspeed == None or maxspeed <= 0:
             maxspeed = config.roads[highway].maxspeed
@@ -187,13 +221,18 @@ def exportStreetnetworkData(ce):
         if len(segments) <= 0 or type == 'merge':
             continue
             
-        graphNodes.append(MMKGraphNode(node)) 
+        graphNodes.append(MMKGraphNode(ce.getOID(node), [], ce.getPosition(node), ce.getAttribute(node ,'type'))) 
         for segment in segments:
             finished = ce.getAttribute(segment, 'finished')
             if finished != None and finished == 'true':
                 continue
             
             oneway = ce.getAttribute(segment, 'oneway') == 'yes'
+            maxspeed = ce.getAttribute(segment, 'maxspeed')
+            lanes = ce.getAttribute(segment, 'lanes')
+            lanesBack = ce.getAttribute(segment, 'lanes:backward')
+            lanesForw = ce.getAttribute(segment, 'lanes:forward')
+            distance = 0
             
             nextSegment = segment
             nextNode = node
@@ -202,13 +241,17 @@ def exportStreetnetworkData(ce):
                 segmentsNodes = ce.getObjectsFrom(nextSegment, ce.isGraphNode)
                 
                 if len(segmentsNodes) < 2:
-                    raise Exception('The segment ' + ce.getOID(nextSegment) +' was not valid!')
+                    raise Exception('The segment ' + ce.getOID(nextSegment) + ' was not valid!')
+                
+                oldNode = nextNode
                 
                 # Take the next node
                 if ce.getOID(nextNode) == ce.getOID(segmentsNodes[0]): 
                     nextNode = segmentsNodes[1]
                 else:
                     nextNode = segmentsNodes[0]
+                
+                distance += nodeDistance(oldNode, nextNode)
                 
                 # This is already a real junction
                 if ce.getAttribute(nextNode, 'type') != 'merge':
@@ -220,14 +263,47 @@ def exportStreetnetworkData(ce):
                 if ce.getOID(nextSegment) == ce.getOID(newSegments[0]): 
                     nextSegment = newSegments[1]
                 else:
-                    nextSegment = newSegments[0]    
+                    nextSegment = newSegments[0]
+
+            segmentsNodes = ce.getObjectsFrom(nextSegment, ce.isGraphNode)
+                
+            if len(segmentsNodes) < 2:
+                raise Exception('The segment ' + ce.getOID(nextSegment) + ' was not valid!')
+         
+            if ce.getOID(node) == ce.getOID(segmentsNodes[0]): 
+                start = node
+                end = nextNode
+            else:
+                start = nextNode
+                end = node
+            
+            if lanesForw != None:
+                lanes = lanesForw
+            else:
+                if not oneway:
+                    lanes = int(lanes) / 2
+            
+            # Add segment from start to end
+            edge = MMKGraphSegment(ce.getOID(segment)+':a', ce.getOID(start), ce.getOID(end), distance, lanes, maxspeed, [])
+            graphSegments.append(edge)
+            
+            if not oneway:
+                if lanesBack != None:
+                    lanes = lanesBack
+                
+                # Add segment from end to start
+                edge = MMKGraphSegment(ce.getOID(segment)+':b', ce.getOID(end), ce.getOID(start), distance, lanes, maxspeed, [])
+                graphSegments.append(edge)
+
+    print(graphNodes)
+    print(graphSegments)
                     
 def cleanupGraph(ce, cleanupSettings):
     graphlayer = ce.getObjectsFrom(ce.scene, ce.isGraphLayer)
     ce.cleanupGraph(graphlayer, cleanupSettings)
-    
-if __name__ == '__main__':
-    
+
+@noUIupdate
+def export(ce, config):
     print('Cleaning up old imports...')
     
     # Delete all old layers
@@ -255,6 +331,11 @@ if __name__ == '__main__':
     print('Exporting network...')
     
     exportStreetnetworkData(ce)
+    
+    print("Done")
+
+if __name__ == '__main__':    
+    export(ce, config)
 
     '''
     cc = CoordinatesConvertor()
@@ -268,4 +349,3 @@ if __name__ == '__main__':
     
     print(ce.getObjectsFrom(ce.findByOID('e0f15792-2342-11b2-806f-00e8564141bb'), ce.isGraphNode))
     '''
-    print("Done")
