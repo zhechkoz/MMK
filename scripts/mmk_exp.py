@@ -69,17 +69,12 @@ class MMKGraph(object):
     
     def setSegmentCnt(self, segmentCnt):
         self.segmentCnt = segmentCnt
-        
-    def appendGraphItem(self, itemType, OID, vertices, attributesDict, neighbours):
-        item = MMKGraphItem(OID,itemType, neighbours)
-        item.decodeAndAppendVertices(vertices)
-        item.appendAttributes(attributesDict)
-
-        if itemType == 'node':
-            self.nodes[str(OID)] = item
-        elif itemType == 'segment':
-            self.segments[str(OID)] = item
-            item.calcLength(item.vertices[0], item.vertices[1])            
+    
+    def appendGraphItem(self, item):
+        if isinstance(item, MMKGraphNode):
+            self.nodes[str(item.OID)] = item
+        elif isinstance(item, MMKGraphSegment):
+            self.segments[str(item.OID)] = item           
         else:
             raise ValueError('GraphItem should be node or segment')    
    
@@ -97,10 +92,6 @@ class MMKGraph(object):
             print('No Segment with OID: ' + str(OID) + ' found')
             return None
     
-    def buildDirectionInformation(self):
-        for s in self.segments.values():
-            pass
-    
     def exportJson(self, exportName):
         dir = ce.toFSPath('/' + ce.project())
         mkdir_p(os.path.join(dir, 'export'))
@@ -111,79 +102,95 @@ class MMKGraph(object):
         print('File exported! Location: ' + dir + '\n')
       
  
-class MMKGraphItem(object):
-    
-    def __init__(self, itemOID, itemType, neighbours = []):
-        self.OID = itemOID
+class MMKGraphItem(object):   
+    def __init__(self, itemID, vertices):
+        self.OID = itemID
         self.vertices = []
-        self.itemType = itemType
-        self.dict = dict(OID=str(self.OID), itemType=self.itemType, vertices=self.vertices)
-        
-        if self.itemType != 'shape':
-            self.shapes = []
-            self.dict.update(shapes=self.shapes)
-        
-        if self.itemType == 'segment':
-            if len(neighbours) != 2:
-                raise ValueError('Segments should have exactly two end nodes!')
-
-            self.start = neighbours[0]
-            self.end = neighbours[1]
-            self.dict.update({'start' : self.start, 'end' : self.end})
-        
-        if self.itemType == 'node':
-            self.corrSegments = neighbours
-            self.dict.update(corrSegments=self.corrSegments)
+        self.decodeAndAppendVertices(vertices)
 
     def reprJSON(self):
-        return self.dict  
-    
-    def calcLength(self, v1, v2):
-        vabs = MMKGraphItemVertex(v2.x-v1.x, v2.y-v1.y, v2.z-v1.z)
-        abs = math.sqrt(vabs.x**2 + vabs.y**2 + vabs.z**2)
-        
-        if self.itemType == 'segment':
-            self.segmentLength = abs
-            self.dict.update(segmentLength=self.segmentLength) 
-        
-        return abs            
+        return dict(ID=str(self.OID), vertices=self.vertices)             
                
     def appendVertex(self, x, y, z):
-        vertex = MMKGraphItemVertex(x, y, z)
+        vertex = MMKGraphVertex(x, y, z)
         self.vertices.append(vertex)
         
     def decodeAndAppendVertices(self, verticesList):
+        # TODO: Apply transformation for every point to match Unity CS
         for i in xrange(0,(len(verticesList)-1),3):
-            self.appendVertex(verticesList[i], verticesList[i+1], verticesList[i+2])            
-            
-    def appendAttributes(self, attributesDict):
-        self.dict.update(attributesDict)
-        for (key, value) in attributesDict.iteritems():
-            setattr(self, key, value)             
+            self.appendVertex(verticesList[i], verticesList[i+1], verticesList[i+2])
 
-    def appendShapes(self, shapeOID, vertices):
-        shape = MMKGraphItem(shapeOID,'shape')
-        shape.decodeAndAppendVertices(vertices)
-        
-        if self.itemType != 'shape':
-            self.shapes.append(shape)
-        else: 
-            raise ValueError('Shapes can not be appendend to shapes')
-    
-    def appendLane(self, laneOID):
-        pass
+    def decodeAttributes(self, attributesDict):
+        for (key, value) in attributesDict.iteritems():
+            setattr(self, key, value)
 
 class MMKGraphSegment(MMKGraphItem):
-    def __init__(self, itemOID, neighbour):
-        super(MMKGraphSegment, self).__init__(itemOID)
+    def __init__(self, itemOID, vertices, attributesDict, neighbours):
+        super(MMKGraphSegment, self).__init__(itemOID, vertices)
         
         if len(neighbours) != 2:
                 raise ValueError('Segments should have exactly two end nodes!')
-
+        
         self.start = neighbours[0]
         self.end = neighbours[1]
+        self.length = self.calcLength(self.vertices[0], self.vertices[1])
+        self.shapes = []
+        self.decodeAttributes(attributesDict)
+        self.determineLanes()
         
-class MMKGraphItemVertex(object):      
+    def calcLength(self, v1, v2):
+        vabs = MMKGraphVertex(v2.x-v1.x, v2.y-v1.y, v2.z-v1.z)
+        abs = math.sqrt(vabs.x**2 + vabs.y**2 + vabs.z**2) 
+        return abs
+        
+    def appendShapes(self, shapeOID, vertices):
+        shape = MMKGraphShape(shapeOID, vertices)
+        self.shapes.append(shape)
+    
+    def determineLanes(self):
+        if not hasattr(self, 'lanesForward'):
+            if self.oneway:
+                self.lanesForward = self.lanes
+            else:
+                self.lanesForward = self.lanesBackward = int(self.lanes) / 2
+    
+    def reprJSON(self):
+        totalLanes = {'number' : self.lanes}
+        totalLanes['forward'] = {'number' : self.lanesForward}
+        if hasattr(self, 'lanesBackward'):
+            totalLanes['backward'] = {'number' : self.lanesBackward}
+            
+        dict = {'hierarchy' : self.hierarchy, 'maxspeed' : self.maxspeed, 'lanes' : totalLanes, 'oneway' : self.oneway, 'osm' : self.osmID, 'length' : self.length, 'start' : self.start, 'end' : self.end, 'shapes' : self.shapes}
+
+        dict.update(super(MMKGraphSegment, self).reprJSON())
+        return dict
+        
+class MMKGraphShape(MMKGraphItem):
+    def __init__(self, itemOID, vertices):
+        super(MMKGraphShape, self).__init__(itemOID, vertices)
+    
+    def reprJSON(self):
+        return super(MMKGraphShape, self).reprJSON()
+        
+class MMKGraphNode(MMKGraphItem):
+    def __init__(self, itemOID, vertices, attributesDict, neighbours):
+        super(MMKGraphNode, self).__init__(itemOID, vertices)
+        
+        self.decodeAttributes(attributesDict)
+        self.corrSegments = neighbours
+        self.shapes = []
+
+    def appendShapes(self, shapeOID, vertices):
+        shape = MMKGraphShape(shapeOID, vertices)
+        self.shapes.append(shape)
+
+    def reprJSON(self):
+        dict = {'hierarchy' : self.hierarchy, 'corrSegments' : self.corrSegments, 'shapes' : self.shapes}
+        dict.update(super(MMKGraphNode, self).reprJSON())
+        return dict
+        
+
+class MMKGraphVertex(object):      
     def __init__(self, x, y, z):
         self.x = x
         self.y = y
@@ -206,14 +213,14 @@ def parseGraph(graphLayerName, MMKGraphObj):
         
         for neighbour in neighbours:
             neighboursList.append(ce.getOID(neighbour))
-            
-        MMKGraphObj.appendGraphItem('segment', ce.getOID(o), ce.getVertices(o), attributesDict, neighboursList)
+        
+        segment = MMKGraphSegment(ce.getOID(o), ce.getVertices(o), attributesDict, neighboursList)
         
         shapes = ce.getObjectsFrom(o, ce.isShape)
-                
         for s in shapes:
-            segment = MMKGraphObj.getSegment(ce.getOID(o))
-            segment.appendShapes(ce.getOID(s), ce.getVertices(s)) 
+            segment.appendShapes(ce.getOID(s), ce.getVertices(s))
+
+        MMKGraphObj.appendGraphItem(segment)
             
             
     # Parse nodes
@@ -229,16 +236,13 @@ def parseGraph(graphLayerName, MMKGraphObj):
         
         attributesDict = attributeNode(o, neighboursList, MMKGraphObj)
         
-        MMKGraphObj.appendGraphItem('node', ce.getOID(o), ce.getVertices(o), attributesDict, neighboursList)
+        node = MMKGraphNode(ce.getOID(o), ce.getVertices(o), attributesDict, neighboursList)
         
         shapes = ce.getObjectsFrom(o, ce.isShape)
-        
         for s in shapes:    
-            node = MMKGraphObj.getNode(ce.getOID(o))
             node.appendShapes(ce.getOID(s), ce.getVertices(s)) 
-
-    # Split segments into lanes
-    MMKGraphObj.buildDirectionInformation()
+            
+        MMKGraphObj.appendGraphItem(node)
 
 def attributeSegment(segment):
     highway = ce.getAttribute(segment, 'highway')
@@ -261,13 +265,12 @@ def attributeSegment(segment):
         else:
             lanes = config.roads[highway].lanes
     
-    totalLanes = {'number' : lanes}
-    if lanesBackward:
-        totalLanes['backward'] = {'number' : lanesBackward}
-    if lanesForward:
-        totalLanes['forward'] = {'number' : lanesForward}
+    attributesDict = {'hierarchy' : highway, 'maxspeed' : maxspeed, 'lanes' : lanes, 'oneway' : oneway, 'osmID' : osmID}
     
-    attributesDict = {'hierarchy' : highway, 'maxspeed' : maxspeed, 'lanes' : totalLanes, 'oneway' : oneway, 'osm' : osmID}
+    if lanesBackward:
+        attributesDict['lanesBackward'] = lanesBackward
+    if lanesForward:
+        attributesDict['lanesForward'] = lanesForward
     
     return attributesDict
 
@@ -308,7 +311,6 @@ def attributeNode(node, neighbours, graph):
                 hierarchy = config.roads[maxType].differentPriority
     return {'hierarchy' : hierarchy}
         
-    
 def mkdir_p(path):
     try:
         os.makedirs(path)      
@@ -348,7 +350,7 @@ def clipRegion():
         endVerteces = []
         
         for i in xrange(0, len(segmentVerteces), 3):
-            vertex = MMKGraphItemVertex(abs(segmentVerteces[i]), abs(segmentVerteces[i+1]), abs(segmentVerteces[i+2]))
+            vertex = MMKGraphVertex(abs(segmentVerteces[i]), abs(segmentVerteces[i+1]), abs(segmentVerteces[i+2]))
             endVerteces.append(vertex)
 
         if len(endVerteces) < 2:
@@ -393,7 +395,7 @@ def prepareScene():
 if __name__ == '__main__':
     
     print('MMK Streetnetwork Export\n')
-    #prepareScene()
+    prepareScene()
    
     graph = MMKGraph()
     print('Building streetnetwork...')
