@@ -27,6 +27,7 @@ cleanupSettings.setResolveConflictShapes(True)
 
 osmSettings = OSMImportSettings()
 
+# https://pypi.python.org/pypi/utm
 class CoordinatesConvertor(object):
     def __init__(self):
         (authAndCode, _) = ce.getSceneCoordSystem()
@@ -62,7 +63,14 @@ class MMKGraph(object):
         self.segments = {}
    
     def reprJSON(self):
-        return dict(author=self.author, date=str(self.date), project=self.project, nodeCnt=self.nodeCnt, segementCnt=self.segmentCnt, nodes=self.nodes.values(), segments=self.segments.values())
+        return dict(author=self.author, 
+                    date=str(self.date), 
+                    project=self.project, 
+                    nodeCnt=self.nodeCnt, 
+                    segementCnt=self.segmentCnt, 
+                    nodes=self.nodes.values(), 
+                    segments=self.segments.values()
+               )
         
     def setNodeCnt(self, nodeCnt):
         self.nodeCnt = nodeCnt
@@ -90,7 +98,7 @@ class MMKGraph(object):
             return self.segments[str(OID)]
         else:
             print('No Segment with OID: ' + str(OID) + ' found')
-            return None
+            return None        
     
     def exportJson(self, exportName):
         dir = ce.toFSPath('/' + ce.project())
@@ -129,14 +137,16 @@ class MMKGraphSegment(MMKGraphItem):
         super(MMKGraphSegment, self).__init__(itemOID, vertices)
         
         if len(neighbours) != 2:
-                raise ValueError('Segments should have exactly two end nodes!')
+                raise ValueError('Segments should have exactly two end nodes!\n' + str(self.itemOID))
         
         self.start = neighbours[0]
         self.end = neighbours[1]
         self.length = self.calcLength(self.vertices[0], self.vertices[1])
         self.shapes = []
+        self.lanesForward = []
+        self.lanesBackward = []
         self.decodeAttributes(attributesDict)
-        self.determineLanes()
+        self.determineNumberOfLanes()
         
     def calcLength(self, v1, v2):
         vabs = MMKGraphVertex(v2.x-v1.x, v2.y-v1.y, v2.z-v1.z)
@@ -147,20 +157,33 @@ class MMKGraphSegment(MMKGraphItem):
         shape = MMKGraphShape(shapeOID, vertices)
         self.shapes.append(shape)
     
-    def determineLanes(self):
-        if not hasattr(self, 'lanesForward'):
+    # TODO: Can be deleted because we get the lanes from SUMO?
+    def determineNumberOfLanes(self):
+        if not hasattr(self, 'totalLanesForward'):
             if self.oneway:
-                self.lanesForward = self.lanes
+                self.totalLanesForward = self.totalLanes
             else:
-                self.lanesForward = self.lanesBackward = int(self.lanes) / 2
-    
+                self.totalLanesForward = self.totalLanesBackward = int(self.totalLanes) / 2
+
+    def appendLane(self, lane):
+        raise Exception('Not Implemented!')
+        
     def reprJSON(self):
-        totalLanes = {'number' : self.lanes}
-        totalLanes['forward'] = {'number' : self.lanesForward}
-        if hasattr(self, 'lanesBackward'):
-            totalLanes['backward'] = {'number' : self.lanesBackward}
+        totalLanes = {'number' : self.totalLanes}
+        totalLanes['forward'] = {'number' : self.totalLanesForward}
+        if hasattr(self, 'totalLanesBackward'):
+            totalLanes['backward'] = {'number' : self.totalLanesBackward}
             
-        dict = {'hierarchy' : self.hierarchy, 'maxspeed' : self.maxspeed, 'lanes' : totalLanes, 'oneway' : self.oneway, 'osm' : self.osmID, 'length' : self.length, 'start' : self.start, 'end' : self.end, 'shapes' : self.shapes}
+        dict = {'hierarchy' : self.hierarchy, 
+                'maxspeed' : self.maxspeed, 
+                'lanes' : totalLanes,
+                'oneway' : self.oneway,
+                'osm' : self.osmID, 
+                'length' : self.length, 
+                'start' : self.start, 
+                'end' : self.end, 
+                'shapes' : self.shapes
+        }
 
         dict.update(super(MMKGraphSegment, self).reprJSON())
         return dict
@@ -171,7 +194,20 @@ class MMKGraphShape(MMKGraphItem):
     
     def reprJSON(self):
         return super(MMKGraphShape, self).reprJSON()
+
+class MMKGraphLane(MMKGraphItem):
+    def __init__(self, itemOID, vertices, laneID, length):
+        super(MMKGraphLane, self).__init__(itemOID, vertices)
+        self.laneID = laneID
+        self.length = length
         
+    def reprJSON(self):
+        dict = {'length' : self.length,
+                'laneID' : self.laneID
+        }
+        dict.update(super(MMKGraphSegment, self).reprJSON())
+        return dict
+  
 class MMKGraphNode(MMKGraphItem):
     def __init__(self, itemOID, vertices, attributesDict, neighbours):
         super(MMKGraphNode, self).__init__(itemOID, vertices)
@@ -179,13 +215,21 @@ class MMKGraphNode(MMKGraphItem):
         self.decodeAttributes(attributesDict)
         self.corrSegments = neighbours
         self.shapes = []
+        self.lanes = []
 
     def appendShapes(self, shapeOID, vertices):
         shape = MMKGraphShape(shapeOID, vertices)
         self.shapes.append(shape)
 
+    def appendLane(self, lane):
+        raise Exception('Not Implemented!')
+
     def reprJSON(self):
-        dict = {'hierarchy' : self.hierarchy, 'corrSegments' : self.corrSegments, 'shapes' : self.shapes}
+        dict = {'hierarchy' : self.hierarchy, 
+                'corrSegments' : self.corrSegments, 
+                'shapes' : self.shapes
+        }
+        
         dict.update(super(MMKGraphNode, self).reprJSON())
         return dict
         
@@ -197,7 +241,10 @@ class MMKGraphVertex(object):
         self.z = z
         
     def reprJSON(self):
-        return dict(x=self.x ,y=self.y ,z=self.z)
+        return dict(x=self.x, 
+                    y=self.y, 
+                    z=self.z
+               )
 
 
 def parseGraph(graphLayerName, MMKGraphObj):   
@@ -265,12 +312,17 @@ def attributeSegment(segment):
         else:
             lanes = config.roads[highway].lanes
     
-    attributesDict = {'hierarchy' : highway, 'maxspeed' : maxspeed, 'lanes' : lanes, 'oneway' : oneway, 'osmID' : osmID}
+    attributesDict = {'hierarchy' : highway, 
+                      'maxspeed' : maxspeed, 
+                      'totalLanes' : lanes,
+                      'oneway' : oneway,
+                      'osmID' : osmID
+    }
     
     if lanesBackward:
-        attributesDict['lanesBackward'] = lanesBackward
+        attributesDict['totalLanesBackward'] = lanesBackward
     if lanesForward:
-        attributesDict['lanesForward'] = lanesForward
+        attributesDict['totalLanesForward'] = lanesForward
     
     return attributesDict
 
