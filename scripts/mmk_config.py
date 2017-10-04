@@ -1,11 +1,6 @@
 # Define OSM data location
 osm = 'data/tum.osm'
-
-# Define bounding box
-bbminx = 690370.0
-bbmaxx = 691600.0
-bbminz = 5335624.0
-bbmaxz = 5336828.0
+sumo = 'data/tum.net.xml'
 
 # Define center coordinates
 ox = 690985

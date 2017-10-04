@@ -6,9 +6,10 @@ Created on 25.02.2017
 '''
 from scripting import *
 import simplejson as json
+import xml.etree.ElementTree as ET
 import datetime
 import errno
-import os
+import os, sys
 import math
 import utm
 
@@ -196,14 +197,14 @@ class MMKGraphShape(MMKGraphItem):
         return super(MMKGraphShape, self).reprJSON()
 
 class MMKGraphLane(MMKGraphItem):
-    def __init__(self, itemOID, vertices, laneID, length):
+    def __init__(self, itemOID, vertices, index, length):
         super(MMKGraphLane, self).__init__(itemOID, vertices)
-        self.laneID = laneID
+        self.index = index
         self.length = length
         
     def reprJSON(self):
         dict = {'length' : self.length,
-                'laneID' : self.laneID
+                'index' : self.index
         }
         dict.update(super(MMKGraphSegment, self).reprJSON())
         return dict
@@ -246,6 +247,23 @@ class MMKGraphVertex(object):
                     z=self.z
                )
 
+class SUMOEdge(MMKGraphItem):
+    def __init__(self, itemOID, vertices, order, start, end):
+        super(SUMOEdge, self).__init__(itemOID, vertices)
+        self.order = order
+        self.start = start
+        self.end = end
+        self.lanes = []
+        
+    def appendLane(self, lane):
+        self.lanes.append(lane)
+    
+    def __str__(self):
+        __repr__()
+
+    def __repr__(self):
+        return str(super(SUMOEdge, self).reprJSON()) + ' -- ' + str(self.order) + ' -- ' + str(self.start) + ' -- ' + str(self.end)
+    
 
 def parseGraph(graphLayerName, MMKGraphObj):   
     # Parse segments
@@ -290,6 +308,56 @@ def parseGraph(graphLayerName, MMKGraphObj):
             node.appendShapes(ce.getOID(s), ce.getVertices(s)) 
             
         MMKGraphObj.appendGraphItem(node)
+        
+    # Parse SUMO Lanes
+    
+    sumoFile = ce.toFSPath(config.sumo)
+    if not os.path.isfile(sumoFile):
+        print('SUMO file not found! Lane information will not be generated!')
+        return
+   
+    sumo = ET.parse(sumoFile)
+    root = sumo.getroot()
+    sumoEdges = []
+
+    for edge in root.findall('edge'):
+        attrib = edge.attrib
+        id = attrib['id'][1:] # Ignore the first ':'
+
+        if '_' in id or '#' in id:
+            (osmID, order) = id.replace('_', '#').split('#')
+        else:
+            osmID = id
+            order = 0
+            
+        vertices = []
+        (start, end) = (attrib.get('from', ''), attrib.get('to', ''))
+        
+        if attrib.has_key('shape'):
+            for vertex in attrib['shape'].split(' '):
+                (x, y) = vertex.split(',')
+                vertices.extend((x, 0, y))
+
+        sumoEdge = SUMOEdge(osmID, vertices, order, start, end)
+
+        for lane in edge.findall('lane'):
+            attrib = lane.attrib
+            id = attrib['id']
+            length = attrib.get('length', 0)
+            index = attrib.get('index', 0)
+            vertices = []
+            
+            if attrib.has_key('shape'):
+                for vertex in attrib['shape'].split(' '):
+                    (x, y) = vertex.split(',')
+                    vertices.extend((x, 0, y))
+            
+            lane = MMKGraphLane(id, vertices, index, length)
+            sumoEdge.appendLane(lane)
+        
+        sumoEdges.append(sumoEdge)
+    print(sumoEdges)
+    
 
 def attributeSegment(segment):
     highway = ce.getAttribute(segment, 'highway')
@@ -304,13 +372,10 @@ def attributeSegment(segment):
         print('WARNING: segment with invalid OSM ID found: ' + str(ce.getOID(segment)))
     
     if maxspeed == None or maxspeed <= 0:
-        maxspeed = config.roads[highway].maxspeed
+        print('WARNING: segment with invalid maxspeed found: ' + str(ce.getOID(segment)))
     
     if lanes == None or lanes <= 0:
-        if oneway:
-            lanes = 1
-        else:
-            lanes = config.roads[highway].lanes
+        print('WARNING: segment with invalid lanes found: ' + str(ce.getOID(segment)))
     
     attributesDict = {'hierarchy' : highway, 
                       'maxspeed' : maxspeed, 
@@ -388,38 +453,6 @@ def cleanupGraph():
     graphlayer = ce.getObjectsFrom(ce.scene, ce.isGraphLayer)
     ce.cleanupGraph(graphlayer, cleanupSettings)
 
-    
-def clipRegion():
-    # Remove any other layers created
-    layers = ce.getObjectsFrom(ce.scene, ce.isLayer, ce.isGraphLayer, ce.withName('osm graph'))
-    for layer in layers:
-        if not ce.isGraphLayer(layer):
-            ce.delete(layer)
-    
-    segments = ce.getObjectsFrom(ce.scene, ce.isGraphSegment)
-    for segment in segments:
-        segmentVerteces = ce.getVertices(segment)
-        endVerteces = []
-        
-        for i in xrange(0, len(segmentVerteces), 3):
-            vertex = MMKGraphVertex(abs(segmentVerteces[i]), abs(segmentVerteces[i+1]), abs(segmentVerteces[i+2]))
-            endVerteces.append(vertex)
-
-        if len(endVerteces) < 2:
-            ce.delete(segment)
-            continue
-        
-        highway = ce.getAttribute(segment, 'highway')
-        if highway == None or not (highway in config.roads):
-            ce.delete(segment)
-            continue
-        
-        for vertex in endVerteces:
-            if (vertex.x < config.bbminx or vertex.x > config.bbmaxx or
-                vertex.z < config.bbminz or vertex.z > config.bbmaxz):
-                ce.delete(segment)
-                break
-
 @noUIupdate
 def prepareScene():
     print('Cleaning up old imports...')
@@ -439,15 +472,13 @@ def prepareScene():
         
     for graphLayer in graphLayers:
         ce.setName(graphLayer, 'osm graph')
-    
-    # Delete not drivable roads and roads outside of the specified bounding box and cleanup
-    clipRegion() # TODO: Move to osm sanitisation script!
+
     cleanupGraph()
     
 if __name__ == '__main__':
     
     print('MMK Streetnetwork Export\n')
-    prepareScene()
+    #prepareScene()
    
     graph = MMKGraph()
     print('Building streetnetwork...')
