@@ -5,13 +5,14 @@ Created on 25.02.2017
 
 '''
 from scripting import *
+import os, sys, errno
 import simplejson as json
 import xml.etree.ElementTree as ET
 import datetime
-import errno
-import os, sys
+from collections import namedtuple
 import math
 import utm
+import re
 
 # Get a CityEngine instance
 ce = CE()
@@ -62,6 +63,7 @@ class MMKGraph(object):
         self.segmentCnt = 0
         self.nodes = {}
         self.segments = {}
+        self.OSMOID = {}
    
     def reprJSON(self):
         return dict(author=self.author, 
@@ -82,24 +84,99 @@ class MMKGraph(object):
     def appendGraphItem(self, item):
         if isinstance(item, MMKGraphNode):
             self.nodes[str(item.OID)] = item
+            if self.OSMOID.has_key(str(item.osmID)):
+                raise ValueError('More than one node have the same OSM ID')
         elif isinstance(item, MMKGraphSegment):
-            self.segments[str(item.OID)] = item           
+            self.segments[str(item.OID)] = item            
         else:
-            raise ValueError('GraphItem should be node or segment')    
+            raise ValueError('GraphItem should be node or segment')
+
+        self.OSMOID.setdefault(str(item.osmID), []).append(item.OID)
    
     def getNode(self, OID):
-        if self.nodes.has_key(str(OID)):
-            return self.nodes[str(OID)]
-        else:
-            print('No Node with OID: ' + str(OID) + ' found')
-            return None
+        return self.nodes.get(str(OID), None)
+
     
     def getSegment(self, OID):
-        if self.segments.has_key(str(OID)):
-            return self.segments[str(OID)]
-        else:
-            print('No Segment with OID: ' + str(OID) + ' found')
-            return None        
+        return self.segments.get(str(OID), None)
+
+    def getNodeByOSMID(self, osmID):            
+        return self.getNode(self.OSMOID.get(str(osmID), [''])[0])
+    
+    def getSegmentsByOSMID(self, osmID):            
+        ids = self.OSMOID.get(str(osmID), [])
+        segments = [self.getSegment(oid) for oid in ids] 
+        return segments
+    
+    def collectLanesFromSUMOItems(self, sumoItems):
+        for (id, nodes) in sumoItems.nodes.iteritems():
+            ceNode = self.getNodeByOSMID(id)
+            if not ceNode:
+                continue
+
+            for node in nodes:
+                ceNode.appendLanes(node.lanes)
+
+        for (id, edges) in sumoItems.edges.iteritems():
+            if len(edges) == 1:
+                lanes = edges[0].lanes
+                if len(id) > 1 and id[0:2] == '--':
+                    # Node is negative, ie backwards direction
+                    segments = self.getSegmentsByOSMID(id[2:])
+                    for segment in segments:
+                        segment.appendLanes(lanes, forward=False)
+                elif len(id) > 0 and id[0] == '-':
+                    # It could be either a backward edge or a forward edge
+                    # with a negative id (according to OSM IDs can be negative)
+                    if sumoItems.edges.has_key(id[1:]):
+                        # There is a forward edge so the current is backward
+                        segments = self.getSegmentsByOSMID(id[1:])
+                        for segment in segments:
+                            segment.appendLanes(lanes, forward=False)
+                    else:
+                        # There is no forward edge so the current is a forward
+                        # edge with negative sign
+                        segments = self.getSegmentsByOSMID(id)
+                        for segment in segments:
+                            segment.appendLanes(lanes)
+                else:
+                    # This is a normal forward edge
+                    segments = self.getSegmentsByOSMID(id)
+                    for segment in segments:
+                        segment.appendLanes(lanes)
+                       
+            else:
+                if len(id) > 1 and id[0:2] == '--':
+                    # Backwards edges
+                    segments = self.getSegmentsByOSMID(id[2:])
+                    if len(segments) == 1:
+                        for edge in edges:
+                            segments[0].appendLanes(edge.lanes, forward=False)
+                    else:
+                        pass
+                elif len(id) > 0 and id[0] == '-':
+                    if sumoItems.edges.has_key(id[1:]):
+                        segments = self.getSegmentsByOSMID(id[1:])
+                        if len(segments) == 1:
+                            for edge in edges:
+                                segments[0].appendLanes(edge.lanes, forward=False)
+                        else:
+                            pass
+                    else:
+                        segments = self.getSegmentsByOSMID(id)
+                        if len(segments) == 1:
+                            for edge in edges:
+                                segments[0].appendLanes(edge.lanes)
+                        else:
+                            pass
+                else:
+                    segments = self.getSegmentsByOSMID(id)
+                    if len(segments) == 1:
+                        for edge in edges:
+                            segments[0].appendLanes(edge.lanes)
+                    else:
+                        pass        
+                        
     
     def exportJson(self, exportName):
         dir = ce.toFSPath('/' + ce.project())
@@ -147,7 +224,6 @@ class MMKGraphSegment(MMKGraphItem):
         self.lanesForward = []
         self.lanesBackward = []
         self.decodeAttributes(attributesDict)
-        self.determineNumberOfLanes()
         
     def calcLength(self, v1, v2):
         vabs = MMKGraphVertex(v2.x-v1.x, v2.y-v1.y, v2.z-v1.z)
@@ -158,22 +234,16 @@ class MMKGraphSegment(MMKGraphItem):
         shape = MMKGraphShape(shapeOID, vertices)
         self.shapes.append(shape)
     
-    # TODO: Can be deleted because we get the lanes from SUMO?
-    def determineNumberOfLanes(self):
-        if not hasattr(self, 'totalLanesForward'):
-            if self.oneway:
-                self.totalLanesForward = self.totalLanes
-            else:
-                self.totalLanesForward = self.totalLanesBackward = int(self.totalLanes) / 2
-
-    def appendLane(self, lane):
-        raise Exception('Not Implemented!')
+    def appendLanes(self, lanes, forward = True):
+        if forward:
+            self.lanesForward.extend(lanes)
+        else:
+            self.lanesBackward.extend(lanes)
         
     def reprJSON(self):
-        totalLanes = {'number' : self.totalLanes}
-        totalLanes['forward'] = {'number' : self.totalLanesForward}
-        if hasattr(self, 'totalLanesBackward'):
-            totalLanes['backward'] = {'number' : self.totalLanesBackward}
+        totalLanes = {'forward' : self.lanesForward}
+        if len(self.lanesBackward) > 0:
+            totalLanes['backward'] = self.lanesBackward
             
         dict = {'hierarchy' : self.hierarchy, 
                 'maxspeed' : self.maxspeed, 
@@ -183,31 +253,14 @@ class MMKGraphSegment(MMKGraphItem):
                 'length' : self.length, 
                 'start' : self.start, 
                 'end' : self.end, 
-                'shapes' : self.shapes
         }
+        
+        if len(self.shapes) > 0:
+            dict['shapes'] = self.shapes
 
         dict.update(super(MMKGraphSegment, self).reprJSON())
         return dict
-        
-class MMKGraphShape(MMKGraphItem):
-    def __init__(self, itemOID, vertices):
-        super(MMKGraphShape, self).__init__(itemOID, vertices)
-    
-    def reprJSON(self):
-        return super(MMKGraphShape, self).reprJSON()
 
-class MMKGraphLane(MMKGraphItem):
-    def __init__(self, itemOID, vertices, index, length):
-        super(MMKGraphLane, self).__init__(itemOID, vertices)
-        self.index = index
-        self.length = length
-        
-    def reprJSON(self):
-        dict = {'length' : self.length,
-                'index' : self.index
-        }
-        dict.update(super(MMKGraphSegment, self).reprJSON())
-        return dict
   
 class MMKGraphNode(MMKGraphItem):
     def __init__(self, itemOID, vertices, attributesDict, neighbours):
@@ -222,19 +275,47 @@ class MMKGraphNode(MMKGraphItem):
         shape = MMKGraphShape(shapeOID, vertices)
         self.shapes.append(shape)
 
-    def appendLane(self, lane):
-        raise Exception('Not Implemented!')
+    def appendLanes(self, lanes):
+        self.lanes.extend(lanes)
 
     def reprJSON(self):
         dict = {'hierarchy' : self.hierarchy, 
                 'corrSegments' : self.corrSegments, 
-                'shapes' : self.shapes
+                'osm' : self.osmID,
         }
+        
+        if len(self.lanes) > 0:
+            dict['lanes'] = self.lanes
+        
+        if len(self.shapes) > 0:
+            dict['shapes'] = self.shapes
         
         dict.update(super(MMKGraphNode, self).reprJSON())
         return dict
         
 
+class MMKGraphShape(MMKGraphItem):
+    def __init__(self, itemOID, vertices):
+        super(MMKGraphShape, self).__init__(itemOID, vertices)
+    
+    def reprJSON(self):
+        return super(MMKGraphShape, self).reprJSON()
+
+
+class MMKGraphLane(MMKGraphItem):
+    def __init__(self, itemOID, vertices, index, length):
+        super(MMKGraphLane, self).__init__(itemOID, vertices)
+        self.index = index
+        self.length = length
+        
+    def reprJSON(self):
+        dict = {'length' : self.length,
+                'index' : self.index
+        }
+        dict.update(super(MMKGraphLane, self).reprJSON())
+        return dict
+
+        
 class MMKGraphVertex(object):      
     def __init__(self, x, y, z):
         self.x = x
@@ -247,23 +328,18 @@ class MMKGraphVertex(object):
                     z=self.z
                )
 
-class SUMOEdge(MMKGraphItem):
+class SUMOItem(MMKGraphItem):
     def __init__(self, itemOID, vertices, order, start, end):
-        super(SUMOEdge, self).__init__(itemOID, vertices)
+        super(SUMOItem, self).__init__(itemOID, vertices)
         self.order = order
         self.start = start
         self.end = end
         self.lanes = []
         
-    def appendLane(self, lane):
+    def appendLane(self, id, vertices, index, length):
+        lane = MMKGraphLane(id, vertices, index, length)
         self.lanes.append(lane)
-    
-    def __str__(self):
-        __repr__()
 
-    def __repr__(self):
-        return str(super(SUMOEdge, self).reprJSON()) + ' -- ' + str(self.order) + ' -- ' + str(self.start) + ' -- ' + str(self.end)
-    
 
 def parseGraph(graphLayerName, MMKGraphObj):   
     # Parse segments
@@ -309,36 +385,36 @@ def parseGraph(graphLayerName, MMKGraphObj):
             
         MMKGraphObj.appendGraphItem(node)
         
-    # Parse SUMO Lanes
+    # Try to parse SUMO Lanes
     
     sumoFile = ce.toFSPath(config.sumo)
     if not os.path.isfile(sumoFile):
-        print('SUMO file not found! Lane information will not be generated!')
-        return
-   
+        print('WARNING: SUMO file not found! Lane information will not be generated!')
+    else:
+        sumoItems = parseSUMONet(sumoFile)
+        MMKGraphObj.collectLanesFromSUMOItems(sumoItems)
+        
+
+def parseSUMONet(sumoFile):
     sumo = ET.parse(sumoFile)
     root = sumo.getroot()
-    sumoEdges = []
+    SumoItems = namedtuple('SumoItems', 'nodes, edges')
+    sumoItems = SumoItems({}, {})
 
     for edge in root.findall('edge'):
         attrib = edge.attrib
-        id = attrib['id'][1:] # Ignore the first ':'
 
-        if '_' in id or '#' in id:
-            (osmID, order) = id.replace('_', '#').split('#')
-        else:
-            osmID = id
-            order = 0
-            
-        vertices = []
+        idOrder = re.split('_|#', attrib['id']) # If no order in id set it to 0
+        (osmID, order) = (idOrder[0], idOrder[1] if len(idOrder) > 1 else '0')
         (start, end) = (attrib.get('from', ''), attrib.get('to', ''))
+        vertices = []
         
         if attrib.has_key('shape'):
             for vertex in attrib['shape'].split(' '):
                 (x, y) = vertex.split(',')
                 vertices.extend((x, 0, y))
 
-        sumoEdge = SUMOEdge(osmID, vertices, order, start, end)
+        sumoItem = SUMOItem(osmID, vertices, order, start, end)
 
         for lane in edge.findall('lane'):
             attrib = lane.attrib
@@ -351,14 +427,18 @@ def parseGraph(graphLayerName, MMKGraphObj):
                 for vertex in attrib['shape'].split(' '):
                     (x, y) = vertex.split(',')
                     vertices.extend((x, 0, y))
-            
-            lane = MMKGraphLane(id, vertices, index, length)
-            sumoEdge.appendLane(lane)
-        
-        sumoEdges.append(sumoEdge)
-    print(sumoEdges)
-    
 
+            sumoItem.appendLane(id, vertices, index, length)
+        
+        if len(sumoItem.OID) > 0 and sumoItem.OID[0] == ':':
+            # Nodes are always internal and start with a ':'
+            sumoItem.OID = sumoItem.OID[1:]
+            sumoItems.nodes.setdefault(sumoItem.OID, []).append(sumoItem)
+        else:
+            sumoItems.edges.setdefault(sumoItem.OID, []).append(sumoItem)
+
+    return sumoItems
+    
 def attributeSegment(segment):
     highway = ce.getAttribute(segment, 'highway')
     maxspeed = ce.getAttribute(segment, 'maxspeed')
@@ -379,21 +459,19 @@ def attributeSegment(segment):
     
     attributesDict = {'hierarchy' : highway, 
                       'maxspeed' : maxspeed, 
-                      'totalLanes' : lanes,
                       'oneway' : oneway,
                       'osmID' : osmID
     }
-    
-    if lanesBackward:
-        attributesDict['totalLanesBackward'] = lanesBackward
-    if lanesForward:
-        attributesDict['totalLanesForward'] = lanesForward
     
     return attributesDict
 
 def attributeNode(node, neighbours, graph):
     numConnectedSegments = len(neighbours)
+    osmID = int(ce.getAttribute(node, 'osm_id')) # All OSM IDs are integers
     hierarchy = 'unknown'
+    
+    if osmID == None:
+        print('WARNING: node with invalid OSM ID found: ' + str(ce.getOID(node)))
 
     if numConnectedSegments == 1:
         # Reached an end node
@@ -426,7 +504,11 @@ def attributeNode(node, neighbours, graph):
                 hierarchy = config.roads[maxType].samePriority
             else: # more than one type of priority
                 hierarchy = config.roads[maxType].differentPriority
-    return {'hierarchy' : hierarchy}
+                
+    attributesDict = {'hierarchy' : hierarchy,
+                      'osmID' : osmID
+    }  
+    return attributesDict
         
 def mkdir_p(path):
     try:
