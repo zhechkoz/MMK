@@ -140,6 +140,7 @@ class MMKGraph(object):
                 print("Not valid OSM ID format found " + str(id))
                 continue
             
+            # TODO: Could be optimized
             if len(segments) == 0:
                     continue
             else:
@@ -171,9 +172,15 @@ class MMKGraphItem(object):
         self.vertices.append(vertex)
         
     def decodeAndAppendVertices(self, verticesList):
-        # TODO: Apply transformation for every point to match Unity CS
+        # Apply transformation for every point to match Unity CS
         for i in xrange(0,(len(verticesList)-1),3):
-            self.appendVertex(verticesList[i], verticesList[i+1], verticesList[i+2])
+            x = float(verticesList[i])
+            y = float(verticesList[i+1])
+            z = float(verticesList[i+2])
+            x = x - config.ox if x > 0 else x + config.ox
+            z = z - config.oz if z > 0 else z + config.oz
+            
+            self.appendVertex(x, y, z)
 
     def decodeAttributes(self, attributesDict):
         for (key, value) in attributesDict.iteritems():
@@ -276,7 +283,18 @@ class MMKGraphLane(MMKGraphItem):
         super(MMKGraphLane, self).__init__(itemOID, vertices)
         self.index = index
         self.length = length
-        
+    
+    def decodeAndAppendVertices(self, verticesList):
+        # Apply transformation for every point to match Unity CS
+        for i in xrange(0,(len(verticesList)-1),3):
+            x = float(verticesList[i])
+            y = float(verticesList[i+1])
+            z = float(verticesList[i+2])
+            x = -x + config.sumoox
+            z = -z + config.sumooz
+            
+            self.appendVertex(x, y, z)
+
     def reprJSON(self):
         dict = {'length' : self.length,
                 'index' : self.index
