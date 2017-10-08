@@ -118,65 +118,34 @@ class MMKGraph(object):
                 ceNode.appendLanes(node.lanes)
 
         for (id, edges) in sumoItems.edges.iteritems():
-            if len(edges) == 1:
-                lanes = edges[0].lanes
-                if len(id) > 1 and id[0:2] == '--':
-                    # Node is negative, ie backwards direction
-                    segments = self.getSegmentsByOSMID(id[2:])
-                    for segment in segments:
-                        segment.appendLanes(lanes, forward=False)
-                elif len(id) > 0 and id[0] == '-':
-                    # It could be either a backward edge or a forward edge
-                    # with a negative id (according to OSM IDs can be negative)
-                    if sumoItems.edges.has_key(id[1:]):
-                        # There is a forward edge so the current is backward
-                        segments = self.getSegmentsByOSMID(id[1:])
-                        for segment in segments:
-                            segment.appendLanes(lanes, forward=False)
-                    else:
-                        # There is no forward edge so the current is a forward
-                        # edge with negative sign
-                        segments = self.getSegmentsByOSMID(id)
-                        for segment in segments:
-                            segment.appendLanes(lanes)
-                else:
-                    # This is a normal forward edge
-                    segments = self.getSegmentsByOSMID(id)
-                    for segment in segments:
-                        segment.appendLanes(lanes)
-                       
+            segments = []
+            forward = True
+
+            if len(id) > 1 and id[0:2] == '--':
+                # Edge's OSM ID is negative and direction is negative, so
+                # this is a backwards segment
+                segments = self.getSegmentsByOSMID(id[2:])
+                forward = False
+            elif len(id) > 0 and id[0] == '-':
+                # If there is an edge with a positive sign then this is a
+                # backwards direction segment, else this is a forward 
+                # segment with a negative OSM ID (according to OSM IDs can be negative)
+                forward = not sumoItems.edges.has_key(id[1:])
+                segments = self.getSegmentsByOSMID(id) if forward else self.getSegmentsByOSMID(id[1:])
+            elif len(id) > 0:
+                # Normal forward edge
+                segments = self.getSegmentsByOSMID(id)
+                forward = True
             else:
-                if len(id) > 1 and id[0:2] == '--':
-                    # Backwards edges
-                    segments = self.getSegmentsByOSMID(id[2:])
-                    if len(segments) == 1:
+                print("Not valid OSM ID format found " + str(id))
+                continue
+            
+            if len(segments) == 0:
+                    continue
+            else:
+                for segment in segments:
                         for edge in edges:
-                            segments[0].appendLanes(edge.lanes, forward=False)
-                    else:
-                        pass
-                elif len(id) > 0 and id[0] == '-':
-                    if sumoItems.edges.has_key(id[1:]):
-                        segments = self.getSegmentsByOSMID(id[1:])
-                        if len(segments) == 1:
-                            for edge in edges:
-                                segments[0].appendLanes(edge.lanes, forward=False)
-                        else:
-                            pass
-                    else:
-                        segments = self.getSegmentsByOSMID(id)
-                        if len(segments) == 1:
-                            for edge in edges:
-                                segments[0].appendLanes(edge.lanes)
-                        else:
-                            pass
-                else:
-                    segments = self.getSegmentsByOSMID(id)
-                    if len(segments) == 1:
-                        for edge in edges:
-                            segments[0].appendLanes(edge.lanes)
-                    else:
-                        pass        
-                        
+                            segment.appendLanes(edge.lanes, forward=forward)    
     
     def exportJson(self, exportName):
         dir = ce.toFSPath('/' + ce.project())
