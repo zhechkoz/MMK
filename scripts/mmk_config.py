@@ -6,8 +6,8 @@ sumo = 'data/tum.net.xml'
 ox = 690985
 oz = 5336220
 
-sumoox = 603
-sumooz = 598
+sumoox = 606
+sumooz = 596
 
 class Road(object):
     def __init__(self, priority, maxspeed, lanes, samePriority, differentPriority):

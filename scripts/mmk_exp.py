@@ -522,6 +522,45 @@ def cleanupGraph():
     graphlayer = ce.getObjectsFrom(ce.scene, ce.isGraphLayer)
     ce.cleanupGraph(graphlayer, cleanupSettings)
 
+def fixIntersectionShapes():
+    objects = ce.getObjectsFrom(ce.scene, ce.isGraphSegment)
+    intersections = []
+    # http://cehelp.esri.com/help/index.jsp?topic=/com.procedural.cityengine.help/html/manual/is/create/streetshapes.html
+    shapeWhiteList = ['CROSSING', 'JUNCTION', 'FREEWAY', 'FREEWAY_ENTRY'] 
+    
+    for o in objects:
+        attrStart = ce.getAttribute(o, 'connectionStart')
+        attrEnd = ce.getAttribute(o, 'connectionEnd')
+        
+        if any(shape in attrStart for shape in shapeWhiteList) != any(shape in attrEnd for shape in shapeWhiteList):
+            intersections.append(o)
+    
+    for intersection in intersections:
+        lanes = int(ce.getAttribute(intersection, 'lanes'))
+        if lanes == 1:
+            continue
+
+        oneway = ce.getAttribute(intersection, 'oneway') == 'yes'
+        lanesForward = ce.getAttribute(intersection, 'lanes:forward')
+        lanesBackward = int(ce.getAttribute(intersection, 'lanes:backward') or 0)
+
+        if not lanesForward:
+            if oneway:
+                lanesForward = lanesBackward = lanes
+            else:
+                lanesForward = int(lanes / 2)
+                lanesBackward = lanes - lanesForward
+        else:
+            lanesForward = int(lanesForward)
+        
+        offset = 2 * (lanesForward - lanesBackward)
+        offset = -offset if lanesForward > lanesBackward else offset
+        
+        ce.setAttributeSource(intersection, '/ce/street/streetOffset', 'OBJECT')
+        oldOffset = int(ce.getAttribute(intersection, 'streetOffset') or 0)
+        newOffset = oldOffset + offset
+        ce.setAttribute(intersection, 'streetOffset', newOffset)
+            
 @noUIupdate
 def prepareScene():
     print('Cleaning up old imports...')
@@ -542,6 +581,8 @@ def prepareScene():
     for graphLayer in graphLayers:
         ce.setName(graphLayer, 'osm graph')
 
+    cleanupGraph()
+    fixIntersectionShapes()
     cleanupGraph()
     
 if __name__ == '__main__':
