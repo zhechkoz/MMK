@@ -1,0 +1,15 @@
+/**
+ * File:    MMK.cga
+ * Created: 30 May 2017 11:31:13 GMT
+ * Author:  lin
+ */
+
+version "2016.1"
+
+###############
+# functions 
+stripEnding(file)			= 
+	case count(file, "/") == 0:
+		substring(file, 0, find(file, ".", 0))
+	else :
+		substring(file, find(file, "/",  count(file, "/")-1)+1, find(file, ".", 0))

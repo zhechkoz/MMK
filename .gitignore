@@ -1,13 +1,11 @@
 # CityEngine
 .version.txt 
 .pydevproject
-scenes/
+.project
 export/
-assets/
-bin/
 images/
-maps/
 models/
+scenes/
 
 # LaTeX
 .texpadtmp
@@ -15,6 +13,7 @@ mmkthesis.pdf
 
 # Python
 __pycache__/
+*.class
 
 # MacOS
 .DS_Store

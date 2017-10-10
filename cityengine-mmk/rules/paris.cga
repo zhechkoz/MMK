@@ -1,0 +1,685 @@
+ /**
+ * File:    paris.cga
+ * Author:  Romain Janil
+ * Created: 2010
+ * Updated: 2015 (by Esri R&D Center Zurich)
+ 
+This grammar generates typical Parisian urban buildings with two levels of 
+detail. The code is provided as is. It is based on a model/image based analysis 
+of urban parisian architecture and so is as generic as possible in a top/bottom 
+hierarchical fashion through year 1600 to 2000. In this regard, lists parameters 
+for bays, lintels, consoles proportion attributes are not complete yet. The idea 
+is to complete and parametrize values for a specific year when needed (obviously
+when the camera is close enough to see windows geometries are not fully aligned 
+with the texture). Finally as a last disclaimer, initial shapes of buildings in 
+a parisian like city are very specific and recognizable. For instance almost each
+building lot is beveled somehow at corners in order to have nice running 
+perspectives. Large parts of Paris were re-styled by Haussmann which earned the 
+nickname the "Wall-City", because of continuous balconies running from facade 
+to facade.
+
+Hint: Good offset subdiv params: 0, 120, 7, 0, 0.1, 750, 350, 20, 18, default true, true, default true
+*/
+
+
+
+version "2015.1"
+
+@Hidden(Level_of_Detail)
+import Parisian_Roof: "ParisianRoofs.cga" 
+	( Type = case Year < 1960: 60%: "gambrel" 30%: "mansard" 7%: "terrace" 2%: "gable" else: "hip" else: "terrace"
+	, Level_of_Detail = case High_LoD:"high" else: "low" )
+
+# imports from Esri Library
+@Hidden
+import Plant: "/ESRI.lib/rules/Plants/Plant_Loader.cga" 
+@Hidden
+import Streets: "/ESRI.lib/rules/Streets/Street_Modern_Simple.cga"
+@Hidden
+import MMK: "MMK.cga"
+
+
+
+#####################################################################
+# ATTRIBUTES
+#
+
+@Group("Building Parameters", 1) 
+
+@Order(0)
+@Handle(shape=Mass, type=toggle, reference=radial, align=topleft, extensionLines=off)
+attr High_LoD = false
+
+@Order(1) @Range(1600,2009)
+attr Year = 1500 + AgeHandle //ceil(rand(1599,1990))
+
+@Order(2) @Range(14,60)	
+@Handle(shape=FacadeHandle, align=left)		
+attr Height = _getInitialHeight
+
+@Order(3) @Range(4,6)
+attr Groundfloor_Height = rand(4.4,4.7) # ground floors are typically ~4.5 higher
+
+@Order(4) @Range(3,5)	
+attr Floor_Height = _getInitialFloorHeight # depending on height of building and groundfloor, average floor height is 4 meters
+			
+@Order(5) @Range(2.5,5)
+attr Tile_Width = rand(3.15,3.45) 	# 3.35 corresponds to the average bays width structuring the facade  
+
+
+@Group("Trees",2) 
+
+@Order(1) @Range("None","Fan","Model","Analytical") @Description("Do not generate Models for whole city i.e. take care with polygon counts!")
+attr ShowTrees = "Fan"
+
+@Group("Demo",3) 
+
+@Order(1) @Range(100,509)
+@Handle(shape=AgeHandleVol, align=right, reference=center, slip=screen, extensionLines=off, skin=sphere, label=off)	
+attr AgeHandle = ceil(rand(99,508))
+
+
+
+#####################################################################
+# CONSTANTS
+#
+
+const textureFolder = "/Example_Paris/assets/"
+const floorsPerTexture = 6 # facade textures span 6 floors
+const texID = getTextureNumber + "_" + getTextureVariation //(ceil(rand(2))) # gets the Year attr and appends a random suffix to add variations
+getTextureNumber =
+	case Year < 1600: 160
+	case Year > 2000: 200
+	else			: floor(Year/10)
+getTextureVariation =
+	case Year%10 < 4: 1
+	case Year%10 < 7: 2
+	else 			: 3
+
+const profdalle = 0.05
+const YardWallHeight = 1 # Height of wall around yards if any
+const sidewalkHeight = 0.25
+const BalconyDepth = 0.6
+const balconyDepthindividuel = 0.3 # Balcony depth for discontinuous ones
+const continuousBalcony =
+	case Year >= 1820 && Year <= 1939: 1 # in classical Hausmannian architecture, balconies at 2nd and 5th floors are continuous across the facades of the building
+	else : 0
+
+
+
+#####################################################################
+# FUNCTIONS
+#
+
+# Initial attribute settings (to get a diversified default appeareance)
+_getInitialHeight = 
+	case initialShape.symbol != "LotInner":
+		rand(12,18) # average height of building
+	else:
+		rand(8,12) # enclosed buildings are somehow smaller
+	
+_getInitialFloorHeight =
+	(Height-Groundfloor_Height) / rint((Height-Groundfloor_Height)/4)
+
+# Asset accessors
+getCourInterieureTexture 	= "genCourInterieure"+(ceil(rand(2)))+ ".png" 				# gets a texture for yard facades
+textureWidth 				= scope.sx/ceil(scope.sx/Tile_Width)*6 						# calculates the number of Bays (or tiles if you prefer) in a facade 
+getGenMurTexture			= "genMur" + (ceil(rand(3))) + ".png" 						# gets a generic texture for some walls
+getGenMurAveugleTexture		= "genMurAveugle" + (ceil(rand(1,5))) + ".png"				# gets a generic texture for shared walls
+getSolTex(inst) 			= "sol" + inst + ".png" 									# gets a generic texture for grounds 
+gettexture = 
+	case Year >= 1940:"FacadePool/" + texID + ".jpg" 				# gets the right texture according to the year type attr
+	#case comp.sel =="back" : getCourInterieureTexture	 #for internal yard facades on recent buildings we keep the  facade textures 
+	case Year >= 1600 : "FacadePool/" + texID + ".jpg" 							
+	else : "1_185_1.png"
+
+
+
+#####################################################################
+#####################################################################
+##
+##  RULES
+##
+##
+
+
+#######################
+# MASS
+#
+
+@StartRule
+Lot -->		
+	case geometry.area < 100:
+		translate(rel,world,0,sidewalkHeight,0) 
+		Asphalt 
+	else:
+		Footprint
+		
+Footprint -->
+	alignScopeToAxes(y)
+	s('1,0,'1) # even foot
+	t(0,0.8*sidewalkHeight,0)
+	extrude(world.y,Height)
+	Mass
+		
+Mass -->
+		comp(f){ side: FacadeHandle | top : Roof }
+		split(y){ Groundfloor_Height: GroundfloorMass | ~1 : UpperfloorsMass }
+		s('1,'((Year-1500)/500),'1) AgeHandleVol 
+		
+FacadeHandle --> NIL
+AgeHandleVol --> NIL
+		
+LotInner --> 
+	case geometry.isClosedSurface():
+		Garden
+	case geometry.area < 200:
+		LotCorner 
+	case p(0.6):
+		t(0,0.8*sidewalkHeight,0)
+		PrivateYard #to enclosed lots derivation
+	else:
+		60%  : Sol s('.7,'1,'.7) center(x) Footprint
+		else : Footprint
+
+LotCorner -->
+	case geometry.area > 100:
+		Sol
+	else:
+		Garden
+
+
+#######################
+# FACADES
+#
+
+GroundfloorMass -->
+		texture(getCourInterieureTexture)
+		set(material.opacitymap, "")
+		set(material.name, MMK.stripEnding(material.colormap)) 
+		comp(f){  back		: alignScopeToAxes(y) split(y){ ~25: BlindFacadeGF}*
+				| side      : alignScopeToAxes(y) split(y){ ~25: split(x){ ~20: FacadeGF}*	}* }
+
+FacadeGF --> 
+	MainFacade("ground")
+
+UpperfloorsMass -->
+	alignScopeToAxes(y)
+	comp(f){  back  	: alignScopeToAxes(y) split(y){ ~25: BlindFacade}*
+			| side		: alignScopeToAxes(y) MainFacade("upper") }
+
+facadeSetWidth = 20
+MainFacade(groundfloor) -->
+	split(x, noAdjust){ ~facadeSetWidth: MainSubFacade(groundfloor) }*
+	
+MainSubFacade(type) -->
+	# Facade Set type defines which floor type to take later
+	case type == "ground" : FacadeSets(0)
+	case scope.sy > 1*Floor_Height : 
+		split(y){ ~4*Floor_Height : FacadeSets(1)
+			| {~Floor_Height : FacadeSets(4)}* 
+			| ~Floor_Height : FacadeSets(5)  }
+	else : 
+		split(y){ ~4*Floor_Height : FacadeSets(1)
+			| {~Floor_Height : FacadeSets(4)}* }
+
+## helper function to calc actual numbers of floors
+nFloors = 
+	case rint(scope.sy/Floor_Height) == 0 : 1
+	else : rint(scope.sy/Floor_Height)
+	
+FacadeSets(textureOffset) --> 
+	texture(gettexture)
+	set(material.opacitymap, "")
+	set(material.name, MMK.stripEnding(material.colormap)) 
+	setupProjection(0,scope.xy,textureWidth,'floorsPerTexture/nFloors,0,'-textureOffset/nFloors) # master setup projection for UVS
+	projectUV(0)
+	Floor(textureOffset)
+
+
+################
+# Back Facades
+################
+
+BlindFacade -->     ## simplified for MMKDriveSim
+	#30%:
+		#split(x){ 'rand(0.2,0.7) : BlindFacadeTextured | ~1: YardFacade }
+	#5%:
+		#split(x){ 'rand(0.1,0.4) : BlindFacadeTextured | ~1: YardFacade | 'rand(0.1,0.4) : BlindFacadeTextured }
+	#5%:
+		#split(x){ 'rand(0.1,0.4) : YardFacade | ~1: BlindFacadeTextured | 'rand(0.1,0.4) : YardFacade }
+	#else:
+		YardFacade
+		
+BlindFacadeTextured -->
+	alignScopeToAxes(y)
+	setupProjection(0,scope.xy,16,scope.sy,16)
+	projectUV(0)
+	texture(getGenMurAveugleTexture)
+	set(material.opacitymap, "")
+	set(material.name, MMK.stripEnding(material.colormap)) 
+
+BlindFacadeGF -->
+	alignScopeToAxes(y)
+	setupProjection(0,scope.xy,16,Groundfloor_Height*6,16)
+	projectUV(0)
+	texture("genMurAveugle1.png")
+	set(material.opacitymap, "")
+	set(material.name, MMK.stripEnding(material.colormap)) 
+	BlindFacade.
+
+
+YardFacade -->
+	FacadeSets(0)
+
+floorindex(textureOffset) = 
+	case textureOffset == 1 : split.index + textureOffset
+	else : textureOffset
+
+Floor(textureOffset) -->
+	case !High_LoD : Floor. # lores floor 
+	case comp.sel == "back": Floor. # lores floor on the back 
+	case textureOffset == 0: GroundFloor. # no hires for groundfloors
+	case !isHighLODCapable : Floor. # facade not high LOD capable
+	else : 	
+		split(y){~Floor_Height : FloorDetails(floorindex(textureOffset))}* # split repeated mid floors again for High LOD
+
+
+#######################
+#
+## Floor and Facade Details for High LOD
+#
+
+FloorDetails(index) --> #basically each floor is subdivided in height in a slab at the bottom where we can then attach balconies, and the rest that will be divided in walls and openings
+	case continuousBalcony >= 1:
+		case index == 1:
+			split(y){'profdalle: BalconyIndivi(1)		s('1,'1,profdalle*2)	Dalle						|~1: FloorWithoutSlab(1)}
+		case index == 2:		
+			split(y){'profdalle: s(scope.sx+2,'1,BalconyDepth) center(x)		i("builtin:cube") projectUV(0)	 BalconyContinuous Iron		|~1:   FloorWithoutSlab(2)}
+		case index == 3:
+			split(y){'profdalle: BalconyIndivi(3)		s('1,'1,profdalle*2)	Dalle						|~1:  FloorWithoutSlab(3)}
+		case index == 4:
+			split(y){'profdalle: BalconyIndivi(4)		s('1,'1,profdalle*2)	Dalle 						|~1:   FloorWithoutSlab(4)}
+		else:
+			split(y){'profdalle: s(scope.sx+2,'1,BalconyDepth) center(x)		i("builtin:cube") projectUV(0) BalconyContinuous Iron		|~1:  FloorWithoutSlab(5)}
+	else: 
+		split(y){'profdalle: 	 s('1,'1,0.1)     								Dalle						|~1:  FloorWithoutSlab(5)}
+
+Dalle -->
+	i("builtin:cube") projectUV(0)	color("#eeeeee") 
+
+Iron --> # base Volume for metallic balcony
+	t(0,'1,0)
+	s('1,1,'1)
+	setupProjection(0,scope.xy,4,1,4)
+	projectUV(0)
+	texture("balcon1.png")
+	set(material.opacitymap, "")
+	set(material.name, MMK.stripEnding(material.colormap)) 
+	comp(f){front: Balustrade.}
+
+FloorWithoutSlab(R) -->
+	split(x){(textureWidth/6):
+		BayTile(R)}*
+			
+BalconyContinuous -->
+	BalconyContinuous.
+
+BalconyIndivi(R) -->
+	case R ==3 || R==4:
+		split(x){(textureWidth/6):
+			BalconyIndiviSupport(R,split.index)
+			t(0,-0.75,-0.1)
+			i("builtin:cube")
+			s(' propBalconIndivi -0.2,0.75,0.2)
+			center(x)
+			Iron}*			
+	else:
+		Corniche.
+	
+BalconyIndiviSupport(R,index) --> # adds individual balconies at right floors
+	case R != 3 :
+		split(x){'((1- propBalconIndivi )/2):
+					NIL
+				|' propBalconIndivi :
+					i("balconindi1.obj")
+					projectUV(0)
+					B.
+				|'((1- propBalconIndivi )/2):
+					NIL}
+	else:
+		case classicOrder > 0: # Here we do a modulo to alternate triangles and cylindrical pediments at each bays.
+			case index/2 == floor(index/2):
+				split(x){'((1- propBalconIndivi )/2):
+							NIL
+						|' propBalconIndivi :
+							s('1,0.60,'1)
+							i("balconindi2.obj")
+							projectUV(0)
+							B.
+						|'((1- propBalconIndivi )/2):
+							NIL}
+			else:
+				split(x){'((1- propBalconIndivi )/2):
+							NIL
+						|' propBalconIndivi :
+							s('1,0.60,'1)
+							i("balconindi3.obj")
+							projectUV(0)
+							B.
+						|'((1- propBalconIndivi )/2):
+							NIL}
+		else:
+			split(x){'((1- propBalconIndivi )/2):
+						NIL
+					|' propBalconIndivi :
+						i("balconindi1.obj")
+						projectUV(0)
+						B.
+					|'((1- propBalconIndivi )/2):
+						NIL}
+
+BayTile(R) -->	# For the Bay (Tile) part, we first check if we want a bow window and so insert it at specific row locations
+				# the we split in an up lintel part and the remaining wall part where we'll do the opening
+				# R corresponds to a the current floor and will be passed trough other derivated shapes to trigger different things
+	case !geometry.isRectangular(3) :
+		texture("genMurAveugle1.png")
+		set(material.opacitymap, "")
+		set(material.name, MMK.stripEnding(material.colormap)) 
+		BlindFacade.
+
+	case oriel < 1:
+		split(y){'(1-propLinteau):
+					Wall
+				|'propLinteau:
+					
+					Lintel(R)}
+	else:
+		case  R !=1 && (split.index ==0 || split.index ==6 || split.index == 13 ):
+			s('1,'1,0.7)
+			i("oriel1.obj")
+			projectUV(0)
+			//translateUV(0,0,0.166666)
+			set(trim.vertical,false)
+			Oriel.
+		else:
+			split(y){'(1-propLinteau):
+						
+						Wall
+					|'propLinteau:
+						
+						Lintel(R)}	
+
+Wall --> # Each side of the opening we keep a Pier part
+			split(x){'((1-propOpening)/2):
+				Pier.
+			|'propOpening:
+				Opening
+			|'((1-propOpening)/2):
+				Pier.}
+
+Opening --> # opening is extrude, the comped, in Jouee (the sides) and the remaining extruded window 
+	extrude( depthOpening )
+	comp(f){side=reverseNormals Jouee. | top : reverseNormals Glass }
+	
+Glass -->
+	set(material.specular.r,0.1) set(material.specular.g,0.1) set(material.specular.b,0.1) 
+	set(material.shininess,20) set(material.reflectivity,0.5)
+
+Lintel(R) --> 
+	case R == 1 || R == 4:
+		split(x){'((1-propOpening)/2):
+					UpPier(0,R)
+				|'propOpening:
+					Impost(R)
+				|'((1-propOpening)/2):
+					UpPier(1,R)}
+	else:
+		case consoleOnF3F4>=1 && R != 5:
+			split(x){'((1-propOpening)/2):
+						UpPier(0,R)
+					|'propOpening:
+						Impost(R)
+					|'((1-propOpening)/2):
+						UpPier(1,R)}
+		else: Lintel.
+					
+UpPier(cote,R) -->
+	case cote == 0:
+		split(x){~1:
+					Impost(R)
+				|ConsoleWidth:
+					Console(0,R)
+					FondConsole.
+				|'offsetConsole:
+					Impost(R)}
+	else:
+		split(x){'offsetConsole:
+					Impost(R)
+				|ConsoleWidth:
+					Console(1,R)
+					FondConsole.
+				|~1:
+					Impost(R)}		
+
+Impost(R) --> # We only add modillons at floor 4
+	case R == 4:
+		split(x){~0.10:
+					Impost.
+				|0.15:
+					Modillon
+					FondModillon.}*
+	else:
+		Mascaron.
+
+Console(cote,R) -->
+	case R == 1 || R == 4:
+		case cote == 0:
+				t(-0,-supConsole,0)		s('1,scope.sy+supConsole,BalconyDepth) 				i("console1.obj")		projectUV(0)			Console.
+		else: 	t(0,-supConsole,0)		s('1,scope.sy+supConsole,BalconyDepth) 				i("console1.obj")		projectUV(0)				Console.
+	else:
+		case cote == 0:
+				t(-0,-supConsole,0)		s('1,scope.sy+supConsole,balconyDepthindividuel) 	i("console1.obj")		projectUV(0)			Console.
+		else: 	t(0,-supConsole,0)		s('1,scope.sy+supConsole,balconyDepthindividuel) 	i("console1.obj")		projectUV(0)				Console.
+		
+Modillon --> 	t(0,scope.sy/2,0)		s('1,'0.5,BalconyDepth/1.5) 						i("modillon1.obj")		projectUV(0)			Modillon.
+
+
+
+#######################
+# ROOFS
+#
+
+# control rooftype with buildingdate by overwritting attribute
+const RoofCovering = 
+	case Year < 1940: #Pre 1940 buildings-->sloped roofs, post 1940 have a probability to be flat
+		50%: "zinc" 30%: "slate" else: "tile"
+	else:
+		5% : "zinc" 90%: "slate" else: "tile"
+		
+const RoofType =
+	case Year > 1940: 
+		40% : "terrace" 
+		10% : case allSloped: "hip"     else: "gable"
+		else: case allSloped: "mansard" else: "gambrel"
+	else: 
+		1%  : "terrace" 
+		10% : case allSloped: "hip"     else: "gable"
+		else: case allSloped: "mansard" else: "gambrel"
+
+allSloped = Height > 17 
+	|| (geometry.isConcave && p(0.9))
+	|| initialShape.symbol == "LotInner"		
+		
+# call main rules of imported rule file
+Roof -->
+	case initialShape.symbol == "LotInner" && p(0.25) && scope.sx >= 10 && scope.sy >= 10:
+		split(x){'0.33: Roof }* #PM
+	else:
+		Parisian_Roof.Roof
+
+# refine shapes generated by imported rule file
+Parisian_Roof.Wall --> 	
+	texture(gettexture)
+	set(material.opacitymap, "")
+	set(material.name, MMK.stripEnding(material.colormap)) 
+
+Asphalt --> Streets.Asphalt
+
+
+
+#######################
+# YARD GROUNDS AND GARDENS
+#
+@StartRule
+Herringbone -->
+	extrude(world.y, Streets.SidewalkHeight)
+	comp(f) {top : HerringboneFace | side: HerringboneFace}
+
+HerringboneFace -->
+  	tileUV(0,~5,~5)
+	setupProjection(0,scope.xy,10,10,0)
+	texture("mmk/herringbone2_albedo.tif")
+	set(material.opacitymap, "")
+	set(material.name, MMK.stripEnding(material.colormap))
+
+@StartRule
+GardenLow -->
+	extrude(world.y, 0.08)
+  	tileUV(0,~2,'1)
+	setupProjection(0,scope.zx,10,10,0) projectUV(0)
+	texture("herbe1.png")
+	set(material.opacitymap, "")
+	set(material.name, MMK.stripEnding(material.colormap))
+
+@StartRule
+Garden -->
+	extrude(world.y, Streets.SidewalkHeight)
+  	tileUV(0,~2,'1)
+	setupProjection(0,scope.zx,10,10,0) projectUV(0)
+	texture("herbe1.png")
+	set(material.opacitymap, "")
+	set(material.name, MMK.stripEnding(material.colormap)) 
+		
+PrivateYard -->
+	Sol
+	SolArbres
+	extrude(world.y,(YardWallHeight+sidewalkHeight)+rand(0.5,2.5))
+	alignScopeToAxes(y)
+	texture(getGenMurTexture)
+	set(material.opacitymap, "")
+	set(material.name, MMK.stripEnding(material.colormap)) 
+	comp (f){front: split(x){ {~5: Muret}* | {~5: Muret}*}
+			|back : NIL
+			|side : split(x){'0.5: Muret}*
+			}
+
+Muret -->
+	t(0,0,-0.1)
+	setupProjection(0,scope.xy,2,2,2) projectUV(0)
+  	Muret.
+
+Sol -->
+	50%:
+		alignScopeToGeometry(zUp,auto)
+		setupProjection(0,scope.xy,10,10,2) projectUV(0)
+  		texture(getSolTex(ceil(rand(9))))
+		set(material.opacitymap, "")
+  		set(material.name, MMK.stripEnding(material.colormap)) 
+  	else:
+  		alignScopeToGeometry(zUp,auto)
+  		setupProjection(0,scope.xy,10,10,0) projectUV(0) 
+  		texture("herbe1.png")
+		set(material.opacitymap, "")
+  		set(material.name, MMK.stripEnding(material.colormap)) 
+  		
+SolArbres -->
+	alignScopeToGeometry(zUp,auto)
+	split(x){~rand(6,12): split(y){~rand(6,12): projectUV(0) Arbre }* }*
+
+getParisTree = listRandom("Black Locust;Norway Spruce;Paper Birch;Red Alder;Sassafras;Sweetgum;White Ash;White Poplar;White Willow;")
+
+Arbre -->
+	case ShowTrees == "None" || p(0.45):
+		NIL
+	else:
+		set(Plant.Representation,ShowTrees)
+		Plant.Generate(getParisTree)	
+
+
+
+
+
+#####################################################################
+# Texture-specific data
+#
+
+
+# data for textures
+const _data_texID = "160_1;160_2;160_3;161_1;161_2;161_3;162_1;162_2;162_3;163_1;163_2;163_3;164_1;164_2;164_3;165_1;165_2;165_3;166_1;166_2;166_3;167_1;167_2;167_3;168_1;168_2;168_3;169_1;169_2;169_3;170_1;170_2;170_3;171_1;171_2;171_3;172_1;172_2;172_3;173_1;173_2;173_3;174_1;174_2;174_3;175_1;175_2;175_3;176_1;176_2;176_3;177_1;177_2;177_3;178_1;178_2;178_3;179_1;179_2;179_3;180_1;180_2;180_3;181_1;181_2;181_3;182_1;182_2;182_3;183_1;183_2;183_3;184_1;184_2;184_3;185_1;185_2;185_3;186_1;186_2;186_3;187_1;187_2;187_3;188_1;188_2;188_3;189_1;189_2;189_3;190_1;190_2;190_3;191_1;191_2;191_3;192_1;192_2;192_3;193_1;193_2;193_3;194_1;194_2;194_3;195_1;195_2;195_3;196_1;196_2;196_3;197_1;197_2;197_3;198_1;198_2;198_3;199_1;199_2;199_3;200_1;200_2;200_3;"
+const _data_propOpening = "0.35;0.33;0.47;0.5;0.42;0.4;0.59;0.56;0.35;0.53;0.58;0.47;0.56;0.56;0.56;0.52;0.43;0.48;0.44;0.5;0.48;0.41;0.34;0.45;0.4;0.36;0.61;0.51;0.4;0.43;0.39;0.5;0.51;0.45;0.48;0.48;0.5;0.57;0.57;0.6;0.48;0.48;0.38;0.41;0.53;0.57;0.61;0.49;0.45;0.46;0.46;0.51;0.44;0.52;0.48;0.57;0.5;0.33;0.33;0.33;0.48;0.41;0.4;0.41;0.47;0.48;0.47;0.6;0.46;0.41;0.5;0.4;0.37;0.53;0.41;0.48;0.48;0.4;0.48;0.42;0.38;0.45;0.49;0.41;0.35;0.41;0.3;0.35;0.33;0.35;0.54;0.4;0.39;0.37;0.33;0.33;0.37;0.33;0.46;0.36;0.46;0.31;0.33;0.33;0.33;0.63;0.33;0.8;0.8;0.3;0.92;0.53;0.99;0.33;0.33;0.33;0.33;0.33;0.33;0.27;0.33;0.33;0.33;"
+const _data_propLinteau = "0.22;0.18;0.26;0.3;0.15;0.17;0.14;0.12;0.16;0.25;0.16;0.13;0.21;0.31;0.31;0.18;0.18;0.26;0.19;0.18;0.26;0.19;0.18;0.14;0.17;0.24;0.07;0.23;0.18;0.14;0.2;0.16;0.21;0.25;0.2;0.19;0.21;0.11;0.11;0.13;0.13;0.19;0.22;0.3;0.13;0.18;0.15;0.2;0.17;0.09;0.25;0.23;0.34;0.25;0.2;0.23;0.21;0.25;0.25;0.25;0.29;0.26;0.14;0.25;0.24;0.1;0.32;0.32;0.36;0.29;0.25;0.3;0.23;0.24;0.23;0.22;0.22;0.22;0.28;0.25;0.25;0.31;0.18;0.25;0.25;0.14;0.25;0.15;0.31;0.17;0.24;0.26;0.3;0.28;0.25;0.23;0.13;0.19;0.23;0.33;0.23;0.25;0.25;0.25;0.25;0.19;0.25;0.08;0.15;0.05;0.49;0.09;0.45;0.25;0.25;0.25;0.25;0.25;0.25;0.29;0.25;0.25;0.25;"
+const _data_depthOpening = "-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.5;-0.4;-0.5;-0.55;-0.4;-1;-0.4;-1;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;-0.4;"
+const _data_consoleOnF3F4 = "0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;1;1;0;0;0;1;1;0;1;1;1;1;1;0;0;0;0;1;0;1;1;0;1;1;1;1;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;"
+const _data_offsetConsole = "0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0.1;0;0;0;0;0;0;0;0.34;0.34;0.25;0;0.2;0.57;0;0.21;0;0.11;0;0.1;0;0;0.39;0.14;0.09;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;"
+const _data_supConsole = "0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;-0.2;0.25;0.25;0.05;0.25;0.24;0.25;0.25;0.25;0.25;0.05;-0.24;0.2;0.05;0.25;0.45;0.25;0.25;0.25;0.25;0.25;0.26;0.25;0.25;0.8;0.35;-0.2;0.28;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;0.25;"
+const _data_classicOrder = "0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;1;1;0;0;0;1;1;1;1;0;0;0;1;0;1;0;0;0;0;0;1;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;"
+const _data_propBalconIndivi = "0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.6;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.7;0.8;0.7;0.8;0.8;0.8;0.8;0.8;0.5;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;0.8;"
+const _data_oriel = "0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;1;1;1;0;0;0;1;0;1;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;"
+const _data_isHighLODCapable = "1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;1;0;0;0;1;0;1;0;1;1;1;1;0;0;1;0;0;0;1;0;0;0;"
+
+const nTexID = listSize(_data_texID)
+
+# accessors
+_texID(ind) 			= listItem(_data_texID, ind)
+_propOpening(ind) 		= float(listItem(_data_propOpening, ind))
+_propLinteau(ind) 		= float(listItem(_data_propLinteau, ind))
+_depthOpening(ind) 		= float(listItem(_data_depthOpening, ind))
+_consoleOnF3F4(ind) 	= float(listItem(_data_consoleOnF3F4, ind))
+_offsetConsole(ind) 	= float(listItem(_data_offsetConsole, ind))
+_supConsole(ind) 		= float(listItem(_data_supConsole, ind))
+_classicOrder(ind) 		= float(listItem(_data_classicOrder, ind))
+_propBalconIndivi(ind) 	= float(listItem(_data_propBalconIndivi, ind))
+_oriel(ind) 			= float(listItem(_data_oriel, ind))
+_isHighLODCapable(ind)	= bool(listItem(_data_isHighLODCapable, ind))
+
+_indexFromTexID(val) 	= listIndex(_data_texID, val)
+
+# texture index for building
+const texInd 			= _indexFromTexID(texID)
+
+# texture params for building
+const propOpening 		= _propOpening(texInd)
+const propLinteau 		= _propLinteau(texInd)
+const depthOpening 		= _depthOpening(texInd)
+const consoleOnF3F4 	= _consoleOnF3F4(texInd)
+const offsetConsole 	= _offsetConsole(texInd)
+const supConsole 		= _supConsole(texInd)
+const classicOrder 		= _classicOrder(texInd)
+const propBalconIndivi 	= _propBalconIndivi(texInd)
+const oriel 			= _oriel(texInd)
+const isHighLODCapable 	= _isHighLODCapable(texInd)
+
+const ConsoleWidth 		= 0.25
+
+
+
+style Wall_Corner
+attr Height = 3.0
+attr Groundfloor_Height = 0.0
+attr Floor_Height = 1.0
+attr ShowTrees = "None"
+
+
+style Wall_Corner_1
+attr Year = 1866.0
+attr AgeHandle = 366.0
+
+
+style Wall_Straight
+attr Year = 1600.0
+attr Height = 3.0
+attr Groundfloor_Height = 0.0
+attr Floor_Height = 1.0
+attr ShowTrees = "None"
+attr AgeHandle = 150.0

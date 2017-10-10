@@ -1,0 +1,311 @@
+/**
+ * Author:  Romain Janil & Esri R&D Center Zurich
+ */
+
+version "2015.0"
+
+@Hidden
+import MMK: "MMK.cga"
+
+###############
+# Attributes
+#
+
+@Range("low","high") @Order(1)
+attr Level_of_Detail	= "low"
+
+@Range(Hip="hip",Gable="gable",Mansard="mansard",Gambrel="gambrel",Terrace="terrace") @Order(2)
+@Handle(shape=RoofHandleVol, type=selector, reference=radial, align=topright)
+attr Type				= 60%: "gambrel" 30%: "mansard" 7%: "terrace" 2%: "gable" else: "hip"
+
+@Range(Zinc="zinc",Slate="slate",Tile="tile") @Order(3)
+@Handle(shape=RoofHandleVol, type=selector, reference=radial, align=topright)
+attr Covering 			= 50%: "zinc" 35%: "slate" else: "tile"
+
+@Range(15,35) @Order(4)
+attr Angle 				= case Type == "gambrel": 15 else: rand(20,30)
+
+@Range(0,0.5)
+attr Overhang			= case Type=="mansard" && p(0.3): rand(0.1,0.3) else: 0
+
+@Range(3,4) @Hidden
+attr Tile_Width 		= rand(3,3.5)
+
+
+@Hidden
+attr chosenMansardID = 0
+@Hidden
+attr chosenColorTone = ""
+@Hidden
+attr chosenColorName = ""
+
+###############
+# constants
+
+const getTerraceTex	= "flatroof" + ceil(rand(5)) + ".png" 					# gets a texture for flat roofs
+const getRoofTex    = fileRandom("assets/parisianRoofs/"+Covering+"*.png")
+getMansardTex(n) = "assets/parisianRoofs/comble_tex_"+ n +".png"
+getMansardBaseTex(n) = "assets/parisianRoofs/comble_base_"+ n +".png"
+getMansardAsset(n) = 	"assets/parisianRoofs/comble_"+ n +".obj"
+const randMansardID = ceil(rand(6)) 
+const colorTone 	=
+	10% : "#EEEEEE"		# darker tint
+	10% : "#DEEBFF" 	# blueish tint
+	10% : "#D6FFEB" 	# greenish tint
+	10% : "#FFF4DB" 	# orangeish tint
+	10% : "#F9CDC7" 	# reddish tint
+	else: "#FFFFFF"
+const chimneyWidth  = rand(0.4,0.6)
+
+###############
+# functions 
+
+textureWidth 		= scope.sx/ceil(scope.sx/Tile_Width)*6  	# calculates the number of Bays (or tiles if you prefer) in a facade 
+textureHeight 		= 
+	case Covering=="slate": scope.sy*2 
+	case Covering=="zinc" || scope.sy>5: scope.sy 
+	else: scope.sy*2 //8
+chimneyTexture		= "genMur" + (ceil(rand(3))) + ".png" 						# gets a generic texture for some walls
+mansardAngle 		= case Angle*3<65: 65 case Angle*3>80: 80 else: Angle*3
+highLOD				= case Level_of_Detail=="high": true else: false
+dormerDim(n)		=
+	case n == 1 : 1.65
+	case n == 2 : 2.2
+	case n == 3 : 1.2
+	case n == 4 : 1.3
+	case n == 5 : 1.6
+	else        : 1.5		
+
+# MMK Additions
+colorName(tone)				= 
+	case tone == "#EEEEEE" : "_dark"
+	case tone == "#DEEBFF" : "_blue"
+	case tone == "#D6FFEB" : "_green"
+	case tone == "#FFF4DB" : "_orange"
+	case tone == "#F9CDC7" : "_red"
+	else : ""
+
+#######################
+#
+# MAIN RULES
+#
+#######################
+
+Roof -->
+	set(chosenColorTone, colorTone)
+	set(chosenColorName, colorName(chosenColorTone))
+	set(chosenMansardID, randMansardID)
+	offset(Overhang,inside)			
+	RoofType
+
+RoofType -->
+	case Type == "terrace": RoofTerrace 
+	case Type == "gambrel":	RoofGambrel
+	case Type == "mansard": RoofMansard
+	case Type == "hip"    : RoofHip
+	else                  : RoofGable
+
+RoofMansard -->
+	roofHip(mansardAngle)
+	split(y){3: comp(f){side: Mansard | top: RoofHip | bottom: RoofCovering } }
+
+RoofGambrel -->
+	roofGable(mansardAngle) 
+	split(y){3: comp(f){side: Mansard | top: RoofGable | bottom: RoofCovering } }
+
+RoofHip -->
+	roofHip(Angle) RoofHandleVol Ridges
+	comp(f){top : RoofCovering RoofProps |side: RoofCovering }
+
+	
+RoofGable -->
+	roofGable(Angle) RoofHandleVol Ridges
+	comp(f){top : RoofCovering RoofProps |side: RoofCovering }
+	
+RoofHandleVol --> NIL
+	
+#######################
+# Flatroof
+# 
+
+RoofTerrace -->
+	case highLOD: 
+		RoofTerraceFloor
+		offset(-0.3, border)
+		extrude(rand(0.5,1)) RoofHandleVol
+		comp(f){ bottom: NIL | all: RoofTerraceRailing }
+	else:
+		RoofTerraceFloor RoofHandleVol
+
+RoofTerraceFloor -->
+	texture(getTerraceTex)
+	set(material.opacitymap, "")
+	set(material.name, MMK.stripEnding(material.colormap)) 
+	setupProjection(0,scope.xy,~16,~16) projectUV(0)
+	Flatroof.
+	
+RoofTerraceRailing	-->
+	texture(getTerraceTex)
+	set(material.opacitymap, "")
+	set(material.name, MMK.stripEnding(material.colormap)) 
+	setupProjection(0,scope.xy,textureWidth,-60) projectUV(0) # take to top of the facade texture 
+	Wall.
+
+
+#######################
+# Mansard
+# 
+
+Mansard --> # Start of derivation for vertical roof windows (Attics)
+	split(x, noAdjust){ ~textureWidth: MansardWindows }* # make same split as for subfacade below
+
+MansardWindows -->
+	case highLOD:
+		case geometry.angle(maxSlope) > 85: 
+			MansardCovering
+		else:
+			MansardCovering
+			alignScopeToAxes(y)	 
+			split(y){'0.03: NIL 
+				| '0.9: split(x){(textureWidth/6): 
+							split(x){~1:NIL | '0.55: Dormer | ~1:NIL } }* # make same split as for facade tiles
+				|'0.07: NIL }
+	else:
+		color(chosenColorTone)
+		texture(getMansardTex(chosenMansardID))
+		set(material.opacitymap, "")
+		set(material.name, MMK.stripEnding(material.colormap) + chosenColorName) 
+		setupProjection(0,scope.xy,~textureWidth / 6,'1) projectUV(0)
+
+Dormer -->	
+	NIL
+	#case scope.sx < 1 || !geometry.isRectangular(10):                 # removed for MMKDriveSim
+		#NIL
+	#case scope.sz < 0.1:
+		#s(dormerDim(chosenMansardID),0.9 * scope.sy,1.2) center(x) i(getMansardAsset(chosenMansardID)) DormerAsset
+	#else: 
+		#s(dormerDim(chosenMansardID),0.9 * scope.sy,scope.sz+.2) center(x) i(getMansardAsset(chosenMansardID)) DormerAsset
+	
+DormerAsset -->
+	case !overlaps(inter):
+		DormerAsset.
+		#s('1,'1,scope.sz-2) 
+		#i("assets/parisianRoofs/comble3.obj") 				# PM: TODO, not sure if it loads mtl or not....
+		#translateUV(0,rint(rand(6))/6,0)					# randomly translate 1/6th
+	else:
+		NIL
+
+
+#######################
+# Roof Covering
+#
+		
+RoofCovering -->
+	texture(getRoofTex) color(chosenColorTone)
+		set(material.opacitymap, "")
+		set(material.name, MMK.stripEnding(material.colormap) + chosenColorName) 
+	setupProjection(0,scope.xy,16,textureHeight) projectUV(0)
+	Covering.
+
+MansardCovering -->
+	texture(getMansardBaseTex(chosenMansardID)) color(chosenColorTone)
+	set(material.opacitymap, "")
+	set(material.name, MMK.stripEnding(material.colormap) + chosenColorName) 
+	setupProjection(0,scope.xy,16,textureHeight) projectUV(0)
+
+
+Ridges -->
+	case highLOD && Covering == "zinc":
+		comp(e){ hip: Ridge | valley: Ridge | ridge: Ridge }
+	else: NIL
+
+Ridge -->
+	s('1,0.1,0.1) center(y)
+	i("builtin:cube") RoofCovering #PM: not sure about the uv coords here...
+		
+		
+#######################
+# Roof Props
+#
+
+RoofProps --> # support for horizontal roof windows
+	case scope.sx < 3:
+		NIL
+	else:
+		split(x){~rand(3,6)   	: NIL
+				|(rand(1,1.5))	: FanLight
+				|(rand(1,2))  	: NIL
+				#|chimneyWidth 	: Chimney   # removed for MMKDriveSim
+				|~rand(1,2) 	: NIL }*
+		NIL
+
+FanLight -->	
+	case highLOD && geometry.isRectangular(15):
+		split(y){'rand(0.7)		: NIL
+				#|(rand(1,1.5)) 	: alignScopeToGeometry(yUp,auto)                # removed for MMKDriveSim
+				#				  i("vasistas.obj")
+				#				  set(material.ambient.r,0)
+				#				  set(material.ambient.g,0)
+				#				  set(material.ambient.b,0)
+				#				  texture("genVasistas1.png") FanLight.
+				}
+	else:
+		NIL							
+
+
+#######################
+# Chimneys
+#
+
+
+Chimney -->
+	case p(0.55) || !geometry.isRectangular(45): 
+		NIL
+	else:
+		set(trim.vertical,false)
+		alignScopeToAxes(y) 
+		i("builtin:cube")
+		texture(chimneyTexture)
+		set(material.opacitymap, "")
+		set(material.name, MMK.stripEnding(material.colormap))  
+		ChimneyMass
+		
+ChimneyMass -->
+	case highLOD:
+		comp(f){side: ChimneyWall |top: alignScopeToGeometry(zUp,auto) ChimneyCornice ChimneyAssets }
+	else:
+		s('1,scope.sy+0.25,'1)		
+		comp(f){side: ChimneyWall |top: alignScopeToGeometry(zUp,auto) ChimneyWall }
+
+ChimneyWall -->
+	setupProjection(0,scope.xy,8,8) projectUV(0)
+	translateUV(0,rand,0)
+
+ChimneyCornice --> # Top body of chimneys 
+	s(scope.sx+0.2,scope.sy+0.2,0.25) center(xy)
+	i("builtin:cube") texture("genMur2.png")
+	set(material.opacitymap, "")
+	set(material.name, MMK.stripEnding(material.colormap)) 
+				
+ChimneyAssets -->
+	case highLOD:
+		t(0,0,0.25)
+		split(x){~0.60: alignScopeToGeometry(yUp,auto) ChimneyAsset }*
+	else:
+		NIL
+		
+ChimneyAsset --> # Here we insert either an orange clay cylinder asset or a metallic one
+	20%:
+		s('1,(rand(0.50,1)),'1)
+		i("fut1.obj")
+		texture("genMat1.png")
+		set(material.opacitymap, "")
+		set(material.name, MMK.stripEnding(material.colormap)) 
+	13%:
+		s('1,(rand(0.75,1.5)),'1)
+		i("fut2.obj")
+		texture("parisianRoofs/zinc1.png")
+		set(material.opacitymap, "")
+		set(material.name, MMK.stripEnding(material.colormap)) 
+	else:
+		NIL
