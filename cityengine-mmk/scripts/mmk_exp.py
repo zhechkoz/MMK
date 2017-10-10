@@ -17,8 +17,16 @@ import re
 # Get a CityEngine instance
 ce = CE()
 
-sys.path.append(ce.toFSPath('scripts'))
-import mmk_config as config
+# Define OSM data location
+osm = 'data/tum-sanitized.osm'
+sumo = 'data/tum-sanitized.net.xml'
+
+# Define center coordinates
+ox = 690985
+oz = 5336220
+
+sumoox = 606
+sumooz = 596
 
 # Define cleanup settings which preserve osm meta data
 cleanupSettings = CleanupGraphSettings()
@@ -83,66 +91,80 @@ class MMKGraph(object):
     
     def appendGraphItem(self, item):
         if isinstance(item, MMKGraphNode):
-            self.nodes[str(item.OID)] = item
-            if self.OSMOID.has_key(str(item.osmID)):
+            self.nodes[item.OID] = item
+            if self.OSMOID.has_key(item.osmID):
                 raise ValueError('More than one node have the same OSM ID')
         elif isinstance(item, MMKGraphSegment):
-            self.segments[str(item.OID)] = item            
+            self.segments[item.OID] = item         
         else:
             raise ValueError('GraphItem should be node or segment')
 
-        self.OSMOID.setdefault(str(item.osmID), []).append(item.OID)
+        self.OSMOID.setdefault(item.osmID, []).append(item.OID)
    
     def getNode(self, OID):
-        return self.nodes.get(str(OID), None)
-
+        return self.nodes.get(OID, None)
     
     def getSegment(self, OID):
-        return self.segments.get(str(OID), None)
+        return self.segments.get(OID, None)
 
     def getNodeByOSMID(self, osmID):            
-        return self.getNode(self.OSMOID.get(str(osmID), [''])[0])
+        return self.getNode(self.OSMOID.get(osmID, [''])[0])
     
     def getSegmentsByOSMID(self, osmID):            
-        ids = self.OSMOID.get(str(osmID), [])
+        ids = self.OSMOID.get(osmID, [])
         segments = [self.getSegment(oid) for oid in ids] 
         return segments
     
     def collectLanesFromSUMOItems(self, sumoItems):
         for (id, nodes) in sumoItems.nodes.iteritems():
-            ceNode = self.getNodeByOSMID(id)
+            osmID = int(id)
+            ceNode = self.getNodeByOSMID(osmID)
+
             if not ceNode:
-                continue
+                # Node was deleted during CE cleanup process so
+                # try to find the nearest node which exists and append the
+                # lanes information. 
+                # Important: User has to match the CE model
+                missingNode = nodes[0]
+                minDistance = sys.maxint
+                for node in self.nodes.values():
+                    abs = missingNode.vertices[0].distanceTo(node.vertices[0]) 
+                    if abs < minDistance:
+                        minDistance = abs
+                        ceNode = node
 
             for node in nodes:
                 ceNode.appendLanes(node.lanes)
+                ceNode.hierarchy = node.hierarchy
 
         for (id, edges) in sumoItems.edges.iteritems():
-            segments = []
             forward = True
+            osmID = 0
 
             if len(id) > 1 and id[0:2] == '--':
                 # Edge's OSM ID is negative and direction is negative, so
                 # this is a backwards segment
-                segments = self.getSegmentsByOSMID(id[2:])
+                osmID = int(id[2:])
                 forward = False
             elif len(id) > 0 and id[0] == '-':
                 # If there is an edge with a positive sign then this is a
                 # backwards direction segment, else this is a forward 
                 # segment with a negative OSM ID (according to OSM IDs can be negative)
                 forward = not sumoItems.edges.has_key(id[1:])
-                segments = self.getSegmentsByOSMID(id) if forward else self.getSegmentsByOSMID(id[1:])
+                osmID = int(id) if forward else int(id[1:])
             elif len(id) > 0:
                 # Normal forward edge
-                segments = self.getSegmentsByOSMID(id)
+                osmID = int(id)
                 forward = True
             else:
                 print("Not valid OSM ID format found " + str(id))
                 continue
             
-            # TODO: Could be optimized
+            segments = self.getSegmentsByOSMID(osmID)
+
             if len(segments) == 0:
-                    continue
+                print('WARNING: Segment with OSM ID ' + str(id) + ' found in SUMO is missing!')
+                continue
             else:
                 for segment in segments:
                         for edge in edges:
@@ -177,8 +199,8 @@ class MMKGraphItem(object):
             x = float(verticesList[i])
             y = float(verticesList[i+1])
             z = float(verticesList[i+2])
-            x = x - config.ox if x > 0 else x + config.ox
-            z = z - config.oz if z > 0 else z + config.oz
+            x = x - ox if x > 0 else x + ox
+            z = z - oz if z > 0 else z + oz
             
             self.appendVertex(x, y, z)
 
@@ -195,16 +217,11 @@ class MMKGraphSegment(MMKGraphItem):
         
         self.start = neighbours[0]
         self.end = neighbours[1]
-        self.length = self.calcLength(self.vertices[0], self.vertices[1])
+        self.length = self.vertices[0].distanceTo(self.vertices[1])
         self.shapes = []
         self.lanesForward = []
         self.lanesBackward = []
         self.decodeAttributes(attributesDict)
-        
-    def calcLength(self, v1, v2):
-        vabs = MMKGraphVertex(v2.x-v1.x, v2.y-v1.y, v2.z-v1.z)
-        abs = math.sqrt(vabs.x**2 + vabs.y**2 + vabs.z**2) 
-        return abs
         
     def appendShapes(self, shapeOID, vertices):
         shape = MMKGraphShape(shapeOID, vertices)
@@ -244,6 +261,7 @@ class MMKGraphNode(MMKGraphItem):
         
         self.decodeAttributes(attributesDict)
         self.corrSegments = neighbours
+        self.hierarchy = 'unknown'
         self.shapes = []
         self.lanes = []
 
@@ -290,8 +308,8 @@ class MMKGraphLane(MMKGraphItem):
             x = float(verticesList[i])
             y = float(verticesList[i+1])
             z = float(verticesList[i+2])
-            x = -x + config.sumoox
-            z = -z + config.sumooz
+            x = -x + sumoox
+            z = -z + sumooz
             
             self.appendVertex(x, y, z)
 
@@ -309,11 +327,17 @@ class MMKGraphVertex(object):
         self.y = y
         self.z = z
         
+    def distanceTo(self, other):
+        vabs = MMKGraphVertex(other.x-self.x, other.y-self.y, other.z-self.z)
+        abs = math.sqrt(vabs.x**2 + vabs.y**2 + vabs.z**2) 
+        return abs
+
     def reprJSON(self):
         return dict(x=self.x, 
                     y=self.y, 
                     z=self.z
                )
+
 
 class SUMOItem(MMKGraphItem):
     def __init__(self, itemOID, vertices, order, start, end):
@@ -326,7 +350,17 @@ class SUMOItem(MMKGraphItem):
     def appendLane(self, id, vertices, index, length):
         lane = MMKGraphLane(id, vertices, index, length)
         self.lanes.append(lane)
-
+    
+    def decodeAndAppendVertices(self, verticesList):
+        # Apply transformation for every point to match Unity CS
+        for i in xrange(0,(len(verticesList)-1),3):
+            x = float(verticesList[i])
+            y = float(verticesList[i+1])
+            z = float(verticesList[i+2])
+            x = -x + sumoox
+            z = -z + sumooz
+            
+            self.appendVertex(x, y, z)
 
 def parseGraph(graphLayerName, MMKGraphObj):   
     # Parse segments
@@ -371,10 +405,10 @@ def parseGraph(graphLayerName, MMKGraphObj):
             node.appendShapes(ce.getOID(s), ce.getVertices(s)) 
             
         MMKGraphObj.appendGraphItem(node)
-        
+
     # Try to parse SUMO Lanes
     
-    sumoFile = ce.toFSPath(config.sumo)
+    sumoFile = ce.toFSPath(sumo)
     if not os.path.isfile(sumoFile):
         print('WARNING: SUMO file not found! Lane information will not be generated!')
     else:
@@ -387,39 +421,46 @@ def parseSUMONet(sumoFile):
     root = sumo.getroot()
     SumoItems = namedtuple('SumoItems', 'nodes, edges')
     sumoItems = SumoItems({}, {})
+    junctions = {j.attrib['id'] : j.attrib for j in root.findall('junction')}
 
     for edge in root.findall('edge'):
-        attrib = edge.attrib
+        edgeAttrib = edge.attrib
 
-        idOrder = re.split('_|#', attrib['id']) # If no order in id set it to 0
-        (osmID, order) = (idOrder[0], idOrder[1] if len(idOrder) > 1 else '0')
-        (start, end) = (attrib.get('from', ''), attrib.get('to', ''))
+        idOrder = re.split('_|#', edgeAttrib['id']) # If no order in id set it to 0
+        (id, order) = (idOrder[0], int(idOrder[1]) if len(idOrder) > 1 else 0)
+        (start, end) = (edgeAttrib.get('from', ''), edgeAttrib.get('to', ''))
+        isNode = (len(id) > 0 and id[0] == ':') # Nodes are always internal and start with a ':'
+        id = id[1:] if isNode else id
         vertices = []
+        itemAttr = {}
         
-        if attrib.has_key('shape'):
-            for vertex in attrib['shape'].split(' '):
+        if isNode:
+            junctionAttrib = junctions[id]
+            vertices.extend((junctionAttrib['x'], 0, junctionAttrib['y']))
+            itemAttr = {'hierarchy' : junctionAttrib['type']}
+        elif edgeAttrib.has_key('shape'):
+            for vertex in edgeAttrib['shape'].split(' '):
                 (x, y) = vertex.split(',')
-                vertices.extend((x, 0, y))
-
-        sumoItem = SUMOItem(osmID, vertices, order, start, end)
+                vertices.extend((x, 0, y))            
+            
+        sumoItem = SUMOItem(id, vertices, order, start, end)
+        sumoItem.decodeAttributes(itemAttr)
 
         for lane in edge.findall('lane'):
-            attrib = lane.attrib
-            id = attrib['id']
-            length = attrib.get('length', 0)
-            index = attrib.get('index', 0)
+            laneAttrib = lane.attrib
+            id = laneAttrib['id']
+            length = laneAttrib.get('length', 0)
+            index = laneAttrib.get('index', 0)
             vertices = []
             
-            if attrib.has_key('shape'):
-                for vertex in attrib['shape'].split(' '):
+            if laneAttrib.has_key('shape'):
+                for vertex in laneAttrib['shape'].split(' '):
                     (x, y) = vertex.split(',')
                     vertices.extend((x, 0, y))
 
             sumoItem.appendLane(id, vertices, index, length)
         
-        if len(sumoItem.OID) > 0 and sumoItem.OID[0] == ':':
-            # Nodes are always internal and start with a ':'
-            sumoItem.OID = sumoItem.OID[1:]
+        if isNode:
             sumoItems.nodes.setdefault(sumoItem.OID, []).append(sumoItem)
         else:
             sumoItems.edges.setdefault(sumoItem.OID, []).append(sumoItem)
@@ -431,18 +472,19 @@ def attributeSegment(segment):
     maxspeed = ce.getAttribute(segment, 'maxspeed')
     lanes = ce.getAttribute(segment, 'lanes')
     oneway = ce.getAttribute(segment, 'oneway') == 'yes'
-    lanesBackward = ce.getAttribute(segment, 'lanes:backward')
-    lanesForward = ce.getAttribute(segment, 'lanes:forward')
-    osmID = int(ce.getAttribute(segment, 'osm_id')) # All OSM IDs are integers
+    osmID = ce.getAttribute(segment, 'osm_id')
     
     if osmID == None:
-        print('WARNING: segment with invalid OSM ID found: ' + str(ce.getOID(segment)))
+        print('WARNING: Segment with invalid OSM ID found: ' + str(ce.getOID(segment)))
+        osmID = 0
+    else:
+        osmID = int(osmID) # All OSM IDs are 64 bit integers
     
     if maxspeed == None or maxspeed <= 0:
-        print('WARNING: segment with invalid maxspeed found: ' + str(ce.getOID(segment)))
+        print('WARNING: Segment with invalid maxspeed found: ' + str(ce.getOID(segment)))
     
     if lanes == None or lanes <= 0:
-        print('WARNING: segment with invalid lanes found: ' + str(ce.getOID(segment)))
+        print('WARNING: Segment with invalid lanes found: ' + str(ce.getOID(segment)))
     
     attributesDict = {'hierarchy' : highway, 
                       'maxspeed' : maxspeed, 
@@ -453,49 +495,15 @@ def attributeSegment(segment):
     return attributesDict
 
 def attributeNode(node, neighbours, graph):
-    numConnectedSegments = len(neighbours)
-    osmID = int(ce.getAttribute(node, 'osm_id')) # All OSM IDs are integers
-    hierarchy = 'unknown'
+    osmID = ce.getAttribute(node, 'osm_id')
     
     if osmID == None:
-        print('WARNING: node with invalid OSM ID found: ' + str(ce.getOID(node)))
-
-    if numConnectedSegments == 1:
-        # Reached an end node
-        hierarchy = 'end'
-    elif numConnectedSegments == 2:
-        # Two streets connecting; not-real-junction
-        hierarchy = 'connect'
+        print('WARNING: Node with invalid OSM ID found: ' + str(ce.getOID(node)))
+        osmID = 0
     else:
-        # Ordinary junction - try to determine the signals
-        if ce.getAttribute(node, 'highway') == 'traffic_signals':
-            hierarchy = 'traffic_lights'
-        elif ce.getAttribute(node, 'highway') == 'stop':
-            hierarchy = 'stop_sign'
-        else:
-            types = set()
-            maxPriority = 0
-            maxType = 'residential'
-            for segmentOID in neighbours:
-                segment = graph.getSegment(segmentOID)
-                types.add(segment.hierarchy)
-                priority = config.roads[segment.hierarchy].priority
-                if priority > maxPriority:
-                    maxPriority = priority
-                    maxType = segment.hierarchy
-                    
-            # Set the hierarchy of the junction to either regulate two same-priority
-            # ways; otherwise choose what the other lower priority ways have to do 
-            # in order to give priority to the main road.
-            if len(types) == 1: # only same-priority ways
-                hierarchy = config.roads[maxType].samePriority
-            else: # more than one type of priority
-                hierarchy = config.roads[maxType].differentPriority
-                
-    attributesDict = {'hierarchy' : hierarchy,
-                      'osmID' : osmID
-    }  
-    return attributesDict
+        osmID = int(osmID) # All OSM IDs are 64 bit integers
+
+    return {'osmID' : osmID}  
         
 def mkdir_p(path):
     try:
@@ -529,8 +537,8 @@ def fixIntersectionShapes():
     shapeWhiteList = ['CROSSING', 'JUNCTION', 'FREEWAY', 'FREEWAY_ENTRY'] 
     
     for o in objects:
-        attrStart = ce.getAttribute(o, 'connectionStart')
-        attrEnd = ce.getAttribute(o, 'connectionEnd')
+        attrStart = ce.getAttribute(o, 'connectionStart') or ''
+        attrEnd = ce.getAttribute(o, 'connectionEnd') or ''
         
         if any(shape in attrStart for shape in shapeWhiteList) != any(shape in attrEnd for shape in shapeWhiteList):
             intersections.append(o)
@@ -571,7 +579,7 @@ def prepareScene():
     
     print('Importing OSM data...')
     
-    osmFile = ce.toFSPath(config.osm)
+    osmFile = ce.toFSPath(osm)
     if not os.path.isfile(osmFile):
         raise ValueError('OSM file not found!')
 

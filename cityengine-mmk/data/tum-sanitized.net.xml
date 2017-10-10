@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- generated on 09/26/17 16:38:20 by SUMO netconvert Version 0.31.0
+<!-- generated on 10/11/17 01:08:40 by SUMO netconvert Version 0.31.0
 <?xml version="1.0" encoding="UTF-8"?>
 
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
 
     <input>
-        <osm-files value="..\Documents\IDP\MMK\scripts\sanitized.osm"/>
+        <osm-files value="..\data\tum-sanitized.osm"/>
     </input>
 
     <output>
-        <output-file value="..\sanitized.net.xml"/>
+        <output-file value="..\data\tum-sanitized.net.xml"/>
         <output.street-names value="true"/>
         <output.original-names value="true"/>
     </output>
