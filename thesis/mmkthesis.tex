@@ -1,0 +1,130 @@
+%    Copyright (C) Adapted Version by Tiefenbacher (philipp.tiefenbacher@tum.de)
+% 	 Original version from Moritz Kaiser
+%    Institute for Human-Machine Communication
+%    Technische Universität München, Germany
+%    
+%
+%    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    Document:       Template for master's thesis at our institute
+%    Version:        0.5
+%    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass{mmkthesis} %set to mmkthesis_deutsch when writing in german
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Include packages, these are only the basic packages %
+% Add own things if you want                          %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\usepackage[german, english]{babel}               
+% We want to have some math
+\usepackage{amsmath}
+% For the set of real numbers
+\usepackage{amsfonts}
+% Nice figures
+\usepackage{graphicx}
+% with subfigures
+\usepackage[tight]{subfigure}
+% Wrap text around figures
+\usepackage{wrapfig}    
+% More beautiful tables
+\usepackage{booktabs}
+% For pseudo codes (don't forget the noend option)
+\usepackage{algorithmic}
+\usepackage{algorithm}
+
+%create nice graphics with tikz. We recommend to convert your matlab plots with matlab2tikz to a tikz file.
+%\usepackage{tikz}
+%\usepackage{pgfplots}
+%\usetikzlibrary{external, arrows, scopes, decorations.pathreplacing, shapes.geometric, matrix, positioning, decorations.markings}
+
+%convert eps to pdf --> faster compilation of document
+%\usepackage{epstopdf}
+
+%extended enumeration environemt, e.g., inline enumerations
+%\usepackage{enumitem}
+
+%want to read and revise your printed document. Use double space to have more space for corrections between lines.
+%\usepackage{setspace}
+%\doublespacing
+
+%more beautiful fraactions
+%\usepackage{nicefrac}
+
+%you want to add an url?
+%\usepackage{url}
+
+% Make overfull errors more visible in the output PDF by setting \overfullrule:
+\overfullrule=1pt
+
+% Own commands - very helpful
+% \input frontmatter/newcommands.tex
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Document information for the titlepage %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\mmktitle}{Development of a Description\\\vspace{0.1cm} % Title of the thesis
+            Format for Road System Generated\\\vspace{0.2cm}  		% add vspace if your title
+     		by SUMO and City Engine for MMK Car Simulator}          % does not occupy three lines
+\newcommand{\mmkauthor}{Zhechko Zhechev}                            % You, the author, no plagiarism
+\newcommand{\mmkadvisor}{Patrick Lindemann, M.Sc.}          			% Your advisor
+				%in case of a B.Sc. or M.Sc title: NameOfYou/YourAdvisor, B.Sc.
+\newcommand{\mmktypeofwork}{IDP Final Report}                        % Bachelor/Master/IDP, etc.        
+\newcommand{\startedon}{30.04.2016}                                 % Started on
+\newcommand{\handedinon}{15.12.2017}                                % Handed in on
+
+\begin{document}
+%%%%%%%%%%%
+%if you write in german, uncomment the next line
+%\selectlanguage{german}   
+%%%%%%%%%%%
+
+\titlepage    % The TUM typical title page, defined in the mmkthesis class
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Frontmatter, usually incorporates acknowledgements and abstract, see %
+%             http://en.wikipedia.org/wiki/Book_design                 %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%   
+% \frontmatter, \mainmatter, \backmatter is for the book class
+\frontmatter
+\input{frontmatter/abstract.tex}
+\tableofcontents
+
+%%%%%%%%%%%%%%
+% Mainmatter %
+%%%%%%%%%%%%%%
+\mainmatter
+% Introduction
+\input{mainmatter/introduction.tex}
+% Related work
+\input{mainmatter/related_work.tex}
+% Own work
+\input{mainmatter/own_work.tex}
+% Results
+\input{mainmatter/results.tex}
+% Conlusion and outlook
+\input{mainmatter/conclusion.tex}
+
+%%%%%%%%%%%%%%
+% Backmatter %
+%%%%%%%%%%%%%%
+\cleardoublepage
+\begin{appendix}
+\input{backmatter/appendix1.tex}
+\end{appendix}
+\backmatter % Here, because appendix has still the mainmatter formatting
+
+% Writes only, e.g., "bibliography" on top of those sections
+\renewcommand{\chaptermark}[1]{\markboth{#1}{}}
+\renewcommand{\sectionmark}[1]{\markright{#1}{}}
+
+  
+\cleardoublepage
+\addcontentsline{toc}{chapter}{References}
+\bibliographystyle{alpha} % Bibliography
+% Add your works that are not cited in the text with the \nocite* command
+
+
+\bibliography{bibliography/thesis}
+
+\end{document}

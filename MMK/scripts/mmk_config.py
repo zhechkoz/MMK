@@ -1,3 +1,9 @@
+'''
+Created on 01.09.2017
+
+@author: zhechkoz
+
+'''
 # Define OSM data location
 osm = 'data/tum.osm'
 sumo = 'data/tum.net.xml'

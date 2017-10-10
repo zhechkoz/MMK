@@ -1,3 +1,9 @@
+'''
+Created on 27.09.2017
+
+@author: zhechkoz
+
+'''
 import xml.etree.ElementTree as ET
 import mmk_config as config
 

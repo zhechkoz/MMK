@@ -1,0 +1,11 @@
+# CityEngine
+.version.txt 
+.pydevproject
+scenes/
+
+# LaTeX
+.texpadtmp
+mmkthesis.pdf
+
+# MacOS
+.DS_Store
