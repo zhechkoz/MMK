@@ -115,8 +115,8 @@ class MMKGraph(object):
         segments = [self.getSegment(oid) for oid in ids] 
         return segments
     
-    def collectLanesFromSUMOItems(self, sumoItems):
-        for (id, nodes) in sumoItems.nodes.iteritems():
+    def collectLanesFromSUMOItems(self, SUMOedges, SUMOnodes):
+        for (id, nodes) in SUMOnodes.iteritems():
             osmID = int(id)
             ceNode = self.getNodeByOSMID(osmID)
 
@@ -137,7 +137,7 @@ class MMKGraph(object):
                 ceNode.appendLanes(node.lanes)
                 ceNode.hierarchy = node.hierarchy
 
-        for (id, edges) in sumoItems.edges.iteritems():
+        for (id, edges) in SUMOedges.iteritems():
             forward = True
             osmID = 0
 
@@ -150,7 +150,7 @@ class MMKGraph(object):
                 # If there is an edge with a positive sign then this is a
                 # backwards direction segment, else this is a forward 
                 # segment with a negative OSM ID (according to OSM IDs can be negative)
-                forward = not sumoItems.edges.has_key(id[1:])
+                forward = not SUMOedges.has_key(id[1:])
                 osmID = int(id) if forward else int(id[1:])
             elif len(id) > 0:
                 # Normal forward edge
@@ -178,35 +178,41 @@ class MMKGraph(object):
         with open(dir, 'w+') as file:  
             file.write(json.dumps(self, indent=4, sort_keys=True, cls=ComplexEncoder))
         print('File exported! Location: ' + dir + '\n')
+
       
- 
 class MMKGraphItem(object):   
     def __init__(self, itemID, vertices):
         self.OID = itemID
         self.vertices = []
         self.decodeAndAppendVertices(vertices)
 
-    def reprJSON(self):
-        return dict(ID=str(self.OID), vertices=self.vertices)             
-               
     def appendVertex(self, x, y, z):
         vertex = MMKGraphVertex(x, y, z)
         self.vertices.append(vertex)
         
     def decodeAndAppendVertices(self, verticesList):
-        # Apply transformation for every point to match Unity CS
         for i in xrange(0,(len(verticesList)-1),3):
             x = float(verticesList[i])
             y = float(verticesList[i+1])
             z = float(verticesList[i+2])
-            x = x - ox if x > 0 else x + ox
-            z = z - oz if z > 0 else z + oz
+            x, y, z = self.transform(x, y, z)
+           
+            self.appendVertex(x, y, z)          
+        
+    def transform(self, x, y ,z):
+        # Apply transformation for every point to match Unity CS
+        x = x - ox if x > 0 else x + ox
+        z = z - oz if z > 0 else z + oz
             
-            self.appendVertex(x, y, z)
-
+        return x, y, z
+    
     def decodeAttributes(self, attributesDict):
         for (key, value) in attributesDict.iteritems():
             setattr(self, key, value)
+    
+    def reprJSON(self):
+        return dict(ID=str(self.OID), vertices=self.vertices)
+   
 
 class MMKGraphSegment(MMKGraphItem):
     def __init__(self, itemOID, vertices, attributesDict, neighbours):
@@ -295,31 +301,6 @@ class MMKGraphShape(MMKGraphItem):
     def reprJSON(self):
         return super(MMKGraphShape, self).reprJSON()
 
-
-class MMKGraphLane(MMKGraphItem):
-    def __init__(self, itemOID, vertices, index, length):
-        super(MMKGraphLane, self).__init__(itemOID, vertices)
-        self.index = index
-        self.length = length
-    
-    def decodeAndAppendVertices(self, verticesList):
-        # Apply transformation for every point to match Unity CS
-        for i in xrange(0,(len(verticesList)-1),3):
-            x = float(verticesList[i])
-            y = float(verticesList[i+1])
-            z = float(verticesList[i+2])
-            x = -x + sumoox
-            z = -z + sumooz
-            
-            self.appendVertex(x, y, z)
-
-    def reprJSON(self):
-        dict = {'length' : self.length,
-                'index' : self.index
-        }
-        dict.update(super(MMKGraphLane, self).reprJSON())
-        return dict
-
         
 class MMKGraphVertex(object):      
     def __init__(self, x, y, z):
@@ -340,27 +321,51 @@ class MMKGraphVertex(object):
 
 
 class SUMOItem(MMKGraphItem):
-    def __init__(self, itemOID, vertices, order, start, end):
+    def __init__(self, itemOID, vertices):
         super(SUMOItem, self).__init__(itemOID, vertices)
+    
+    def transform(self, x, y, z):
+        # Apply transformation for every point to match Unity CS
+        x = -x + sumoox
+        z = -z + sumooz
+            
+        return x, y, z
+        
+class SUMOEdge(SUMOItem):
+    def __init__(self, itemOID, vertices, order, start, end):
+        super(SUMOEdge, self).__init__(itemOID, vertices)
         self.order = order
         self.start = start
         self.end = end
         self.lanes = []
         
     def appendLane(self, id, vertices, index, length):
-        lane = MMKGraphLane(id, vertices, index, length)
+        lane = SUMOLane(id, vertices, index, length)
         self.lanes.append(lane)
-    
-    def decodeAndAppendVertices(self, verticesList):
-        # Apply transformation for every point to match Unity CS
-        for i in xrange(0,(len(verticesList)-1),3):
-            x = float(verticesList[i])
-            y = float(verticesList[i+1])
-            z = float(verticesList[i+2])
-            x = -x + sumoox
-            z = -z + sumooz
-            
-            self.appendVertex(x, y, z)
+
+        
+class SUMONode(SUMOItem):
+    def __init__(self, itemOID, vertices):
+        super(SUMONode, self).__init__(itemOID, vertices)
+        self.lanes = []
+        
+    def appendLane(self, id, vertices, index, length):
+        lane = SUMOLane(id, vertices, index, length)
+        self.lanes.append(lane)
+        
+
+class SUMOLane(SUMOItem):
+    def __init__(self, itemOID, vertices, index, length):
+        super(SUMOLane, self).__init__(itemOID, vertices)
+        self.index = index
+        self.length = length
+
+    def reprJSON(self):
+        dict = {'length' : self.length,
+                'index' : self.index
+        }
+        dict.update(super(SUMOLane, self).reprJSON())
+        return dict
 
 def parseGraph(graphLayerName, MMKGraphObj):   
     # Parse segments
@@ -412,15 +417,14 @@ def parseGraph(graphLayerName, MMKGraphObj):
     if not os.path.isfile(sumoFile):
         print('WARNING: SUMO file not found! Lane information will not be generated!')
     else:
-        sumoItems = parseSUMONet(sumoFile)
-        MMKGraphObj.collectLanesFromSUMOItems(sumoItems)
+        edges, nodes = parseSUMONet(sumoFile)
+        MMKGraphObj.collectLanesFromSUMOItems(edges, nodes)
         
 
 def parseSUMONet(sumoFile):
     sumo = ET.parse(sumoFile)
     root = sumo.getroot()
-    SumoItems = namedtuple('SumoItems', 'nodes, edges')
-    sumoItems = SumoItems({}, {})
+    sumoEdges, sumoNodes = ({}, {})
     junctions = {j.attrib['id'] : j.attrib for j in root.findall('junction')}
 
     for edge in root.findall('edge'):
@@ -428,22 +432,30 @@ def parseSUMONet(sumoFile):
 
         idOrder = re.split('_|#', edgeAttrib['id']) # If no order in id set it to 0
         (id, order) = (idOrder[0], int(idOrder[1]) if len(idOrder) > 1 else 0)
-        (start, end) = (edgeAttrib.get('from', ''), edgeAttrib.get('to', ''))
         isNode = (len(id) > 0 and id[0] == ':') # Nodes are always internal and start with a ':'
         id = id[1:] if isNode else id
+        
         vertices = []
         itemAttr = {}
-        
+
         if isNode:
-            junctionAttrib = junctions[id]
-            vertices.extend((junctionAttrib['x'], 0, junctionAttrib['y']))
-            itemAttr = {'hierarchy' : junctionAttrib['type']}
-        elif edgeAttrib.has_key('shape'):
-            for vertex in edgeAttrib['shape'].split(' '):
-                (x, y) = vertex.split(',')
-                vertices.extend((x, 0, y))            
+            junctionAttrib = junctions.get(id, None)
+            if junctionAttrib:
+                vertices.extend((junctionAttrib['x'], 0, junctionAttrib['y']))
+                itemAttr = {'hierarchy' : junctionAttrib['type']}
             
-        sumoItem = SUMOItem(id, vertices, order, start, end)
+            sumoItem = SUMONode(id, vertices)
+            sumoNodes.setdefault(sumoItem.OID, []).append(sumoItem)
+        else:
+            if edgeAttrib.has_key('shape'):
+                for vertex in edgeAttrib['shape'].split(' '):
+                    (x, y) = vertex.split(',')
+                    vertices.extend((x, 0, y))            
+
+            (start, end) = (edgeAttrib.get('from', ''), edgeAttrib.get('to', ''))
+            sumoItem = SUMOEdge(id, vertices, order, start, end)
+            sumoEdges.setdefault(sumoItem.OID, []).append(sumoItem)
+            
         sumoItem.decodeAttributes(itemAttr)
 
         for lane in edge.findall('lane'):
@@ -459,13 +471,8 @@ def parseSUMONet(sumoFile):
                     vertices.extend((x, 0, y))
 
             sumoItem.appendLane(id, vertices, index, length)
-        
-        if isNode:
-            sumoItems.nodes.setdefault(sumoItem.OID, []).append(sumoItem)
-        else:
-            sumoItems.edges.setdefault(sumoItem.OID, []).append(sumoItem)
 
-    return sumoItems
+    return sumoEdges, sumoNodes
     
 def attributeSegment(segment):
     highway = ce.getAttribute(segment, 'highway')
