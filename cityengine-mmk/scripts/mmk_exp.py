@@ -204,7 +204,7 @@ class MMKGraphItem(object):
         x = x - ox if x > 0 else x + ox
         z = z - oz if z > 0 else z + oz
             
-        return x, y, z
+        return -x, -y, z
     
     def decodeAttributes(self, attributesDict):
         for (key, value) in attributesDict.iteritems():
