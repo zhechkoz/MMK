@@ -9,7 +9,6 @@ import os, sys, errno
 import simplejson as json
 import xml.etree.ElementTree as ET
 import datetime
-from collections import namedtuple
 import math
 import utm
 import re

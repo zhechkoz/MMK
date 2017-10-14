@@ -4,7 +4,7 @@ Created on 27.09.2017
 @author: zhechkoz
 
 '''
-import sys
+import argparse
 import xml.etree.ElementTree as ET
 from collections import namedtuple
 
@@ -66,11 +66,12 @@ def sanitize(xml):
             xml.remove(relation)
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print('Please provide a path to a OSM file!')
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description='Remove unnecessary way and relation tags in the OSM export file.')
+    parser.add_argument('osmFile', help='Path and name to the OSM export file.')
+
+    args = parser.parse_args()
     
-    osm = ET.parse(sys.argv[1])
+    osm = ET.parse(args.osmFile)
     root = osm.getroot()
     sanitize(root)
-    osm.write(sys.argv[1][:-4] + '-sanitized.osm')
+    osm.write(args.osmFile[:-4] + '-sanitized.osm')
