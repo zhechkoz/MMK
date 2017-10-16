@@ -210,7 +210,7 @@ class MMKGraphItem(object):
             setattr(self, key, value)
     
     def reprJSON(self):
-        return dict(ID=str(self.OID), vertices=self.vertices)
+        return dict(id=str(self.OID), vertices=self.vertices)
    
 
 class MMKGraphSegment(MMKGraphItem):
