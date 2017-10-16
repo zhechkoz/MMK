@@ -3,14 +3,15 @@ using System.Collections.Generic;
 using UnityEngine;
 using SimpleJSON;
 
-public class NetworkShape : MonoBehaviour {
+public class NetworkShape
+{
 		public string id;
 		public List<Vector3> vertices = new List<Vector3> ();
 
-		public static NetworkShape deserializeFromJSON(JSONNode shapeJSON)
+		public static NetworkShape DeserializeFromJSON (JSONNode shapeJSON)
 		{
 				NetworkShape shape = new NetworkShape ();
-				shape.id = shapeJSON["ID"];
+				shape.id = shapeJSON ["id"];
 				JSONArray jsonVertices = shapeJSON ["vertices"].AsArray;
 				foreach (JSONNode jsonVertex in jsonVertices) {
 						float x = jsonVertex ["x"].AsFloat;
@@ -21,7 +22,8 @@ public class NetworkShape : MonoBehaviour {
 				return shape;
 		}
 
-		public List<Vector3> calculateAABB() {
+		public List<Vector3> CalculateExtendedAABB ()
+		{
 				Vector3 max = new Vector3 (float.MinValue, float.MinValue, float.MinValue);
 				Vector3 min = new Vector3 (float.MaxValue, float.MaxValue, float.MaxValue);
 				foreach (Vector3 vertex in vertices) {
@@ -34,8 +36,8 @@ public class NetworkShape : MonoBehaviour {
 				}
 
 				Vector3 d = new Vector3 (max.x - min.x, max.y - min.y, max.z - min.z);
-				Vector3 center = new Vector3(min.x + d.x / 2.0f, min.y + d.y / 2.0f, min.z + d.z / 2.0f);
-
+				Vector3 center = new Vector3 (min.x + d.x / 2.0f, min.y + d.y / 2.0f, min.z + d.z / 2.0f);
+				d.y += 2; // Make sure the box is big enough so the car can trigger the collider
 				return new List<Vector3> () { center, d }; 
 		}
 }

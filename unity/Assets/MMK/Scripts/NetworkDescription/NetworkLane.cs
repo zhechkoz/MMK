@@ -3,18 +3,19 @@ using System.Collections.Generic;
 using UnityEngine;
 using SimpleJSON;
 
-public class NetworkLane : MonoBehaviour {
+public class NetworkLane
+{
 		public string id;
 		int index;
 		double length;
 		public List<Vector3> vertices = new List<Vector3> ();
 
-		public static NetworkLane deserializeFromJSON(JSONNode laneJSON)
+		public static NetworkLane DeserializeFromJSON (JSONNode laneJSON)
 		{
 				NetworkLane lane = new NetworkLane ();
-				lane.id = laneJSON["ID"];
-				lane.index = laneJSON["lane"];
-				lane.length = laneJSON["length"];
+				lane.id = laneJSON ["id"];
+				lane.index = laneJSON ["lane"];
+				lane.length = laneJSON ["length"];
 				JSONArray jsonVertices = laneJSON ["vertices"].AsArray;
 				foreach (JSONNode jsonVertex in jsonVertices) {
 						float x = jsonVertex ["x"].AsFloat;

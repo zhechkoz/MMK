@@ -3,14 +3,26 @@ using System.Collections.Generic;
 using UnityEngine;
 using SimpleJSON;
 
-public class NetworkNode : NetworkItem {
+public class NetworkNode : NetworkItem
+{
 		List<string> neighbourSegments;
-		public List<NetworkLane> lanes;
+		public List<NetworkLane> lanes = new List<NetworkLane> ();
 
-		public static NetworkNode deserializeFromJSON(JSONNode nodeJSON)
+		override public NetworkLane GetLaneByID (string id)
+		{
+				foreach (NetworkLane lane in lanes) {
+						if (lane.id == id) {
+								return lane;
+						}
+				}
+
+				return null;
+		}
+
+		public static NetworkNode DeserializeFromJSON (JSONNode nodeJSON)
 		{
 				NetworkNode node = new NetworkNode ();
-				node.id = nodeJSON ["ID"];
+				node.id = nodeJSON ["id"];
 				node.osmID = nodeJSON ["osm"].AsInt;
 				node.hierarchy = nodeJSON ["hierarchy"];
 
@@ -28,15 +40,14 @@ public class NetworkNode : NetworkItem {
 
 				if (shapes != null && shapes.Count > 0) {
 						foreach (JSONNode shapeJSON in shapes.Children) {
-								NetworkShape shape = NetworkShape.deserializeFromJSON (shapeJSON); 
+								NetworkShape shape = NetworkShape.DeserializeFromJSON (shapeJSON); 
 								node.shapes.Add (shape);
 						}
 				}
 						
 				if (lanes != null && lanes.Count > 0) {
-						node.lanes = new List<NetworkLane> ();
 						foreach (JSONNode laneJSON in lanes.Children) {
-								NetworkLane lane = NetworkLane.deserializeFromJSON (laneJSON);
+								NetworkLane lane = NetworkLane.DeserializeFromJSON (laneJSON);
 								node.lanes.Add (lane);
 						}
 				}

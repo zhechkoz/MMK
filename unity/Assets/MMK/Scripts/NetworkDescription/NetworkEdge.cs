@@ -3,30 +3,37 @@ using System.Collections.Generic;
 using UnityEngine;
 using SimpleJSON;
 
-public class NetworkEdge : NetworkItem {
+public class NetworkEdge : NetworkItem
+{
 		string start;
 		string end;
 		double length;
 		double maxSpeed;
 		bool oneway;
-		string hierarchy;
-		List<Vector3> vertices = new List<Vector3>();
-		public List<NetworkLane> forwardLanes;
-		public List<NetworkLane> backwardLanes;
+		public List<NetworkLane> forwardLanes = new List<NetworkLane> ();
+		public List<NetworkLane> backwardLanes = new List<NetworkLane> ();
 
-		public List<Vector3> getBoxColliderSizeAndCenter() {
-				foreach(NetworkShape shape in shapes) {
-						if (shape.id.EndsWith (":0")) {
-								return shape.calculateAABB ();
+		override public NetworkLane GetLaneByID (string id)
+		{
+				foreach (NetworkLane lane in forwardLanes) {
+						if (lane.id == id) {
+								return lane;
 						}
 				}
+
+				foreach (NetworkLane lane in backwardLanes) {
+						if (lane.id == id) {
+								return lane;
+						}
+				}
+
 				return null;
 		}
 
-		public static NetworkEdge deserializeFromJSON(JSONNode segmentJSON)
+		public static NetworkEdge DeserializeFromJSON (JSONNode segmentJSON)
 		{
 				NetworkEdge segment = new NetworkEdge ();
-				segment.id = segmentJSON ["ID"];
+				segment.id = segmentJSON ["id"];
 				segment.osmID = segmentJSON ["osm"].AsInt;
 				segment.start = segmentJSON ["start"];
 				segment.end = segmentJSON ["end"];
@@ -49,23 +56,21 @@ public class NetworkEdge : NetworkItem {
 
 				if (shapes != null && shapes.Count > 0) {
 						foreach (JSONNode shapeJSON in shapes.Children) {
-								NetworkShape shape = NetworkShape.deserializeFromJSON (shapeJSON); 
+								NetworkShape shape = NetworkShape.DeserializeFromJSON (shapeJSON); 
 								segment.shapes.Add (shape);
 						}
 				}
 
 				if (forward != null && forward.Count > 0) {
-						segment.forwardLanes = new List<NetworkLane> ();
 						foreach (JSONNode laneJSON in forward.Children) {
-								NetworkLane lane = NetworkLane.deserializeFromJSON (laneJSON);
+								NetworkLane lane = NetworkLane.DeserializeFromJSON (laneJSON);
 								segment.forwardLanes.Add (lane);
 						}
 				}
 
 				if (backward != null && backward.Count > 0) {
-						segment.backwardLanes = new List<NetworkLane> ();
 						foreach (JSONNode laneJSON in backward.Children) {
-								NetworkLane lane = NetworkLane.deserializeFromJSON (laneJSON);
+								NetworkLane lane = NetworkLane.DeserializeFromJSON (laneJSON);
 								segment.backwardLanes.Add (lane);
 						}
 				}

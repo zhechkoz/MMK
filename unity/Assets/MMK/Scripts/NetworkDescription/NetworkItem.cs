@@ -3,17 +3,22 @@ using System.Collections.Generic;
 using UnityEngine;
 using SimpleJSON;
 
-public class NetworkItem : MonoBehaviour {
+public abstract class NetworkItem
+{
 		public string id;
 		public int osmID;
 		protected string hierarchy;
 		public List<Vector3> vertices = new List<Vector3> ();
 		public List<NetworkShape> shapes = new List<NetworkShape> ();
 
-		public List<Vector3> getBoxColliderSizeAndCenter() {
-				foreach(NetworkShape shape in shapes) {
+		public abstract NetworkLane GetLaneByID (string id);
+
+		public List<Vector3> GetBoxColliderSizeAndCenter ()
+		{
+				foreach (NetworkShape shape in shapes) {
+						// Only the first shape represents roads
 						if (shape.id.EndsWith (":0")) {
-								return shape.calculateAABB ();
+								return shape.CalculateExtendedAABB ();
 						}
 				}
 				return null;

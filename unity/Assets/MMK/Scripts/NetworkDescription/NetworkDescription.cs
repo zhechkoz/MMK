@@ -4,14 +4,14 @@ using UnityEngine;
 using SimpleJSON;
 using System.IO;
 
-public class NetworkDescription : MonoBehaviour {
+public class NetworkDescription : MonoBehaviour
+{
 
 		string m_Path = "C:\\Users\\Zhechev\\Documents\\IDP\\MMK\\cityengine-mmk\\export\\MMK_GraphExport.json";
-		List<NetworkNode> nodes = new List<NetworkNode>();
-		List<NetworkEdge> edges = new List<NetworkEdge>();
+		Dictionary<string , NetworkItem> networkItems = new Dictionary<string , NetworkItem> ();
 
-		List<Vector3> a = new List<Vector3>(); 
-		List<Vector3> b = new List<Vector3>(); 
+		List<Vector3> xs = new List<Vector3> ();
+		List<Vector3> ys = new List<Vector3> ();
 
 		void Start ()
 		{
@@ -24,52 +24,60 @@ public class NetworkDescription : MonoBehaviour {
 				buildNetwork (json);
 		}
 
-		void buildNetwork(JSONNode root) 
+		public NetworkItem getNetworkItem (string id)
+		{
+				NetworkItem item;
+				return networkItems.TryGetValue (id, out item) ? item : null;
+		}
+
+		private void buildNetwork (JSONNode root)
 		{
 				GameObject networkDescription = new GameObject ("RoadsDescription");
 				foreach (JSONNode segmentJSON in root ["segments"].AsArray.Children) {
-						NetworkEdge edge = NetworkEdge.deserializeFromJSON(segmentJSON);
+						NetworkEdge edge = NetworkEdge.DeserializeFromJSON (segmentJSON);
 						createGameObject (edge, networkDescription);
-						edges.Add (edge);
+						networkItems.Add (edge.id, edge);
 						debugDrawLanes (edge.forwardLanes);
 						debugDrawLanes (edge.backwardLanes);
 				}
 
 				foreach (JSONNode nodeJSON in root ["nodes"].AsArray.Children) {
-						NetworkNode node = NetworkNode.deserializeFromJSON (nodeJSON);
+						NetworkNode node = NetworkNode.DeserializeFromJSON (nodeJSON);
 						createGameObject (node, networkDescription);
-						nodes.Add (node);
+						networkItems.Add (node.id, node);
 						debugDrawLanes (node.lanes);
 				}
 		}
 
-		private void createGameObject(NetworkItem item, GameObject parent) {
-				List<Vector3> centerSizeBoundingBox = item.getBoxColliderSizeAndCenter ();
+		private void createGameObject (NetworkItem item, GameObject parent)
+		{
+				List<Vector3> centerSizeBoundingBox = item.GetBoxColliderSizeAndCenter ();
 
 				if (centerSizeBoundingBox != null) {
 						GameObject roadSegment = new GameObject (item.id);
 						roadSegment.transform.parent = parent.transform;
 						BoxCollider collider = roadSegment.AddComponent<BoxCollider> ();
 						collider.isTrigger = true;
-						collider.center = centerSizeBoundingBox[0];
-						collider.size = centerSizeBoundingBox[1];	
+						collider.center = centerSizeBoundingBox [0];
+						collider.size = centerSizeBoundingBox [1];	
 				}
 		}
 
-		void debugDrawLanes(List<NetworkLane> lanes) {
+		private void debugDrawLanes (List<NetworkLane> lanes)
+		{
 				if (lanes == null) {
 						return;
 				}
 
 				foreach (NetworkLane lane in lanes) {
 						List<Vector3> vertices = lane.vertices;
-						Vector3 prev = vertices[0];
+						Vector3 prev = vertices [0];
 						Vector3 next;
 
 						for (int i = 1; i < vertices.Count; i++) {
-								next = vertices[i];
-								a.Add (next);
-								b.Add (prev);
+								next = vertices [i];
+								xs.Add (next);
+								ys.Add (prev);
 								prev = next;
 						}
 				}
@@ -79,8 +87,8 @@ public class NetworkDescription : MonoBehaviour {
 		{
 				Color red = new Color (1f, 0f, 0f);
 				Gizmos.color = red;
-				for (int i = 0; i < a.Count; i++) {
-						Gizmos.DrawLine (a [i], b [i]);	
+				for (int i = 0; i < xs.Count; i++) {
+						Gizmos.DrawLine (xs [i], ys [i]);	
 				}
 		}
 }
