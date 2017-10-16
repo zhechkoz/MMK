@@ -8,10 +8,16 @@ public class NetworkShape
 		public string id;
 		public List<Vector3> vertices = new List<Vector3> ();
 
+		public NetworkShape (string id)
+		{
+				this.id = id;
+		}
+
 		public static NetworkShape DeserializeFromJSON (JSONNode shapeJSON)
 		{
-				NetworkShape shape = new NetworkShape ();
-				shape.id = shapeJSON ["id"];
+				string id = shapeJSON ["id"];
+				NetworkShape shape = new NetworkShape (id);
+
 				JSONArray jsonVertices = shapeJSON ["vertices"].AsArray;
 				foreach (JSONNode jsonVertex in jsonVertices) {
 						float x = jsonVertex ["x"].AsFloat;
@@ -19,6 +25,7 @@ public class NetworkShape
 						float z = jsonVertex ["z"].AsFloat;
 						shape.vertices.Add (new Vector3 (x, y, z));
 				}
+
 				return shape;
 		}
 

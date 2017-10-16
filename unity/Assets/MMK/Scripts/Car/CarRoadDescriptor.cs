@@ -4,7 +4,6 @@ using UnityEngine;
 
 public class CarRoadDescriptor : MonoBehaviour
 {
-		[SerializeField] public GameObject network;
 		Dictionary<string, NetworkItem> currentRoads = new Dictionary<string,NetworkItem> ();
 
 		void Update ()
@@ -63,8 +62,9 @@ public class CarRoadDescriptor : MonoBehaviour
 
 		void OnTriggerEnter (Collider other)
 		{
-				string id = other.gameObject.name;
-				NetworkItem item = network.GetComponent<NetworkDescription> ().getNetworkItem (id);
+				GameObject networkElement = other.gameObject;
+				string id = networkElement.name;
+				NetworkItem item = networkElement.GetComponent<NetworkItem> ();
 				if (item != null && !currentRoads.ContainsKey (id)) {
 						currentRoads.Add (id, item);
 				}

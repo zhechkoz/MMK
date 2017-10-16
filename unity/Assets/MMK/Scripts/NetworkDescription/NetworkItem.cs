@@ -3,15 +3,17 @@ using System.Collections.Generic;
 using UnityEngine;
 using SimpleJSON;
 
-public abstract class NetworkItem
+public abstract class NetworkItem : MonoBehaviour
 {
 		public string id;
 		public int osmID;
-		protected string hierarchy;
+		public string hierarchy;
 		public List<Vector3> vertices = new List<Vector3> ();
 		public List<NetworkShape> shapes = new List<NetworkShape> ();
 
 		public abstract NetworkLane GetLaneByID (string id);
+
+		public abstract void DeserializeFromJSON (JSONNode nodeJSON);
 
 		public List<Vector3> GetBoxColliderSizeAndCenter ()
 		{

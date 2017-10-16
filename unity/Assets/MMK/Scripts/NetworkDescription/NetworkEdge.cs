@@ -5,11 +5,11 @@ using SimpleJSON;
 
 public class NetworkEdge : NetworkItem
 {
-		string start;
-		string end;
-		double length;
-		double maxSpeed;
-		bool oneway;
+		public string start;
+		public string end;
+		public double length;
+		public double maxSpeed;
+		public bool oneway;
 		public List<NetworkLane> forwardLanes = new List<NetworkLane> ();
 		public List<NetworkLane> backwardLanes = new List<NetworkLane> ();
 
@@ -30,51 +30,49 @@ public class NetworkEdge : NetworkItem
 				return null;
 		}
 
-		public static NetworkEdge DeserializeFromJSON (JSONNode segmentJSON)
+		override public void DeserializeFromJSON (JSONNode segmentJSON)
 		{
-				NetworkEdge segment = new NetworkEdge ();
-				segment.id = segmentJSON ["id"];
-				segment.osmID = segmentJSON ["osm"].AsInt;
-				segment.start = segmentJSON ["start"];
-				segment.end = segmentJSON ["end"];
-				segment.length = segmentJSON ["length"].AsDouble;
-				segment.maxSpeed = segmentJSON ["maxspeed"].AsDouble;
-				segment.hierarchy = segmentJSON ["hierarchy"];
-				segment.oneway = segmentJSON ["oneway"] != null && segmentJSON ["oneway"].AsBool;
+				this.id = segmentJSON ["id"];
+				this.osmID = segmentJSON ["osm"].AsInt;
+				this.start = segmentJSON ["start"];
+				this.end = segmentJSON ["end"];
+				this.length = segmentJSON ["length"].AsDouble;
+				this.maxSpeed = segmentJSON ["maxspeed"].AsDouble;
+				this.hierarchy = segmentJSON ["hierarchy"];
+				this.oneway = segmentJSON ["oneway"] != null && segmentJSON ["oneway"].AsBool;
 						
-				JSONArray forward = segmentJSON ["lanes"] ["forward"].AsArray;
-				JSONArray backward = segmentJSON ["lanes"] ["backward"].AsArray;
-				JSONArray shapes = segmentJSON ["shapes"].AsArray;
-
+				JSONArray jsonForward = segmentJSON ["lanes"] ["forward"].AsArray;
+				JSONArray jsonBackward = segmentJSON ["lanes"] ["backward"].AsArray;
+				JSONArray jsonShapes = segmentJSON ["shapes"].AsArray;
 				JSONArray jsonVertices = segmentJSON ["vertices"].AsArray;
+
 				foreach (JSONNode jsonVertex in jsonVertices) {
 						float x = jsonVertex ["x"].AsFloat;
 						float y = jsonVertex ["y"].AsFloat;
 						float z = jsonVertex ["z"].AsFloat;
-						segment.vertices.Add (new Vector3 (x, y, z));
+						vertices.Add (new Vector3 (x, y, z));
 				}
 
-				if (shapes != null && shapes.Count > 0) {
-						foreach (JSONNode shapeJSON in shapes.Children) {
+				if (jsonShapes != null) {
+						foreach (JSONNode shapeJSON in jsonShapes.Children) {
 								NetworkShape shape = NetworkShape.DeserializeFromJSON (shapeJSON); 
-								segment.shapes.Add (shape);
+								this.shapes.Add (shape);
 						}
 				}
 
-				if (forward != null && forward.Count > 0) {
-						foreach (JSONNode laneJSON in forward.Children) {
+				if (jsonForward != null) {
+						foreach (JSONNode laneJSON in jsonForward.Children) {
 								NetworkLane lane = NetworkLane.DeserializeFromJSON (laneJSON);
-								segment.forwardLanes.Add (lane);
+								this.forwardLanes.Add (lane);
 						}
 				}
 
-				if (backward != null && backward.Count > 0) {
-						foreach (JSONNode laneJSON in backward.Children) {
+				if (jsonBackward != null) {
+						foreach (JSONNode laneJSON in jsonBackward.Children) {
 								NetworkLane lane = NetworkLane.DeserializeFromJSON (laneJSON);
-								segment.backwardLanes.Add (lane);
+								this.backwardLanes.Add (lane);
 						}
 				}
-				return segment;
 		}
 	
 }

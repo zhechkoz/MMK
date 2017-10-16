@@ -5,7 +5,7 @@ using SimpleJSON;
 
 public class NetworkNode : NetworkItem
 {
-		List<string> neighbourSegments;
+		public List<string> neighbourSegments;
 		public List<NetworkLane> lanes = new List<NetworkLane> ();
 
 		override public NetworkLane GetLaneByID (string id)
@@ -19,38 +19,35 @@ public class NetworkNode : NetworkItem
 				return null;
 		}
 
-		public static NetworkNode DeserializeFromJSON (JSONNode nodeJSON)
+		override public void DeserializeFromJSON (JSONNode nodeJSON)
 		{
-				NetworkNode node = new NetworkNode ();
-				node.id = nodeJSON ["id"];
-				node.osmID = nodeJSON ["osm"].AsInt;
-				node.hierarchy = nodeJSON ["hierarchy"];
+				this.id = nodeJSON ["id"];
+				this.osmID = nodeJSON ["osm"].AsInt;
+				this.hierarchy = nodeJSON ["hierarchy"];
 
-				JSONArray lanes = nodeJSON ["lanes"].AsArray;
-				JSONArray shapes = nodeJSON ["shapes"].AsArray;
-				JSONArray vertices = nodeJSON ["vertices"].AsArray;
-
+				JSONArray jsonLanes = nodeJSON ["lanes"].AsArray;
+				JSONArray jsonShapes = nodeJSON ["shapes"].AsArray;
 				JSONArray jsonVertices = nodeJSON ["vertices"].AsArray;
+
 				foreach (JSONNode jsonVertex in jsonVertices) {
 						float x = jsonVertex ["x"].AsFloat;
 						float y = jsonVertex ["y"].AsFloat;
 						float z = jsonVertex ["z"].AsFloat;
-						node.vertices.Add (new Vector3 (x, y, z));
+						this.vertices.Add (new Vector3 (x, y, z));
 				}
 
-				if (shapes != null && shapes.Count > 0) {
-						foreach (JSONNode shapeJSON in shapes.Children) {
+				if (jsonShapes != null) {
+						foreach (JSONNode shapeJSON in jsonShapes.Children) {
 								NetworkShape shape = NetworkShape.DeserializeFromJSON (shapeJSON); 
-								node.shapes.Add (shape);
+								this.shapes.Add (shape);
 						}
 				}
 						
-				if (lanes != null && lanes.Count > 0) {
-						foreach (JSONNode laneJSON in lanes.Children) {
+				if (jsonLanes != null) {
+						foreach (JSONNode laneJSON in jsonLanes.Children) {
 								NetworkLane lane = NetworkLane.DeserializeFromJSON (laneJSON);
-								node.lanes.Add (lane);
+								this.lanes.Add (lane);
 						}
 				}
-				return node;
 		}
 }

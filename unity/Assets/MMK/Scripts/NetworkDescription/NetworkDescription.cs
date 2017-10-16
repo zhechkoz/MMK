@@ -6,9 +6,10 @@ using System.IO;
 
 public class NetworkDescription : MonoBehaviour
 {
+		enum NetworkComponentType { Edge, Node };
 
 		string m_Path = "C:\\Users\\Zhechev\\Documents\\IDP\\MMK\\cityengine-mmk\\export\\MMK_GraphExport.json";
-		Dictionary<string , NetworkItem> networkItems = new Dictionary<string , NetworkItem> ();
+		Dictionary<string , GameObject> networkItems = new Dictionary<string , GameObject> ();
 
 		List<Vector3> xs = new List<Vector3> ();
 		List<Vector3> ys = new List<Vector3> ();
@@ -24,46 +25,64 @@ public class NetworkDescription : MonoBehaviour
 				buildNetwork (json);
 		}
 
-		public NetworkItem getNetworkItem (string id)
+		public GameObject GetNetworkItem (string id)
 		{
-				NetworkItem item;
+				GameObject item;
 				return networkItems.TryGetValue (id, out item) ? item : null;
 		}
 
 		private void buildNetwork (JSONNode root)
 		{
 				GameObject networkDescription = new GameObject ("RoadsDescription");
+
 				foreach (JSONNode segmentJSON in root ["segments"].AsArray.Children) {
-						NetworkEdge edge = NetworkEdge.DeserializeFromJSON (segmentJSON);
-						createGameObject (edge, networkDescription);
-						networkItems.Add (edge.id, edge);
-						debugDrawLanes (edge.forwardLanes);
-						debugDrawLanes (edge.backwardLanes);
+						GameObject roadSegment = 
+								CreateGameObject (NetworkComponentType.Edge, segmentJSON, networkDescription);
+						networkItems.Add (roadSegment.name, roadSegment);
 				}
 
 				foreach (JSONNode nodeJSON in root ["nodes"].AsArray.Children) {
-						NetworkNode node = NetworkNode.DeserializeFromJSON (nodeJSON);
-						createGameObject (node, networkDescription);
-						networkItems.Add (node.id, node);
-						debugDrawLanes (node.lanes);
+						GameObject roadSegment = 
+								CreateGameObject (NetworkComponentType.Edge, nodeJSON, networkDescription);
+						networkItems.Add (roadSegment.name, roadSegment);
 				}
 		}
 
-		private void createGameObject (NetworkItem item, GameObject parent)
-		{
+		private GameObject CreateGameObject (NetworkComponentType type, JSONNode jsonData, GameObject parent)
+		{		
+				GameObject roadElement = new GameObject ();
+				NetworkItem item;
+				if (type == NetworkComponentType.Edge) {
+						item = roadElement.AddComponent<NetworkEdge> ();
+				} else {
+						item = roadElement.AddComponent<NetworkNode> ();
+				}
+
+				item.DeserializeFromJSON (jsonData);
+				roadElement.name = item.id;
+				roadElement.transform.parent = parent.transform;
 				List<Vector3> centerSizeBoundingBox = item.GetBoxColliderSizeAndCenter ();
 
 				if (centerSizeBoundingBox != null) {
-						GameObject roadSegment = new GameObject (item.id);
-						roadSegment.transform.parent = parent.transform;
-						BoxCollider collider = roadSegment.AddComponent<BoxCollider> ();
+						BoxCollider collider = roadElement.AddComponent<BoxCollider> ();
 						collider.isTrigger = true;
 						collider.center = centerSizeBoundingBox [0];
 						collider.size = centerSizeBoundingBox [1];	
 				}
+
+				// Debug Lanes
+				if (type == NetworkComponentType.Edge) {
+						NetworkEdge edge = (NetworkEdge)item;
+						DebugDrawLanes (edge.forwardLanes);
+						DebugDrawLanes (edge.backwardLanes);
+				} else {
+						DebugDrawLanes (((NetworkNode)item).lanes);
+				}
+
+				return roadElement;
 		}
 
-		private void debugDrawLanes (List<NetworkLane> lanes)
+		private void DebugDrawLanes (List<NetworkLane> lanes)
 		{
 				if (lanes == null) {
 						return;
