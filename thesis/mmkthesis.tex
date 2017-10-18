@@ -48,11 +48,11 @@
 %\usepackage{setspace}
 %\doublespacing
 
-%more beautiful fraactions
+%more beautiful fractions
 %\usepackage{nicefrac}
 
 %you want to add an url?
-%\usepackage{url}
+\usepackage{url}
 
 % Make overfull errors more visible in the output PDF by setting \overfullrule:
 \overfullrule=1pt
@@ -96,22 +96,18 @@
 \mainmatter
 % Introduction
 \input{mainmatter/introduction.tex}
-% Related work
-\input{mainmatter/related_work.tex}
-% Own work
-\input{mainmatter/own_work.tex}
-% Results
-\input{mainmatter/results.tex}
-% Conlusion and outlook
+% Background
+\input{mainmatter/background.tex}% Own work
+\input{mainmatter/own_work.tex}% Conlusion and outlook
 \input{mainmatter/conclusion.tex}
 
 %%%%%%%%%%%%%%
 % Backmatter %
 %%%%%%%%%%%%%%
-\cleardoublepage
-\begin{appendix}
-\input{backmatter/appendix1.tex}
-\end{appendix}
+%\cleardoublepage
+%\begin{appendix}
+%\input{backmatter/appendix1.tex}
+%\end{appendix}
 \backmatter % Here, because appendix has still the mainmatter formatting
 
 % Writes only, e.g., "bibliography" on top of those sections
