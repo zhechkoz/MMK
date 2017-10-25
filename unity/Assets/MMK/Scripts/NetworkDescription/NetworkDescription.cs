@@ -43,7 +43,7 @@ public class NetworkDescription : MonoBehaviour
 
 				foreach (JSONNode nodeJSON in root ["nodes"].AsArray.Children) {
 						GameObject roadSegment = 
-								CreateGameObject (NetworkComponentType.Edge, nodeJSON, networkDescription);
+								CreateGameObject (NetworkComponentType.Node, nodeJSON, networkDescription);
 						networkItems.Add (roadSegment.name, roadSegment);
 				}
 		}
