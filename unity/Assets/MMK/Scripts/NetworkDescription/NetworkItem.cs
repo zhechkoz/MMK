@@ -12,7 +12,7 @@ public abstract class NetworkItem : MonoBehaviour
 		public List<NetworkShape> shapes = new List<NetworkShape> ();
 
 		public abstract NetworkLane GetLaneByID (string id);
-
+		public abstract List<NetworkLane> GetAllLanes ();
 		public abstract void DeserializeFromJSON (JSONNode nodeJSON);
 
 		public List<Vector3> GetBoxColliderSizeAndCenter ()

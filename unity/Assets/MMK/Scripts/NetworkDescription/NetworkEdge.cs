@@ -30,6 +30,14 @@ public class NetworkEdge : NetworkItem
 				return null;
 		}
 
+		override public List<NetworkLane> GetAllLanes () {
+				var allLanes = new List<NetworkLane> ();
+				allLanes.AddRange(forwardLanes);
+				allLanes.AddRange (backwardLanes);
+
+				return allLanes;
+		}
+
 		override public void DeserializeFromJSON (JSONNode segmentJSON)
 		{
 				this.id = segmentJSON ["id"];

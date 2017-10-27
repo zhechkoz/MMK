@@ -6,7 +6,7 @@ using SimpleJSON;
 public class NetworkNode : NetworkItem
 {
 		public List<string> neighbourSegments;
-		public List<NetworkLane> lanes = new List<NetworkLane> ();
+		private List<NetworkLane> lanes = new List<NetworkLane> ();
 
 		override public NetworkLane GetLaneByID (string id)
 		{
@@ -17,6 +17,11 @@ public class NetworkNode : NetworkItem
 				}
 
 				return null;
+		}
+
+		override public List<NetworkLane> GetAllLanes () 
+		{
+				return lanes;	
 		}
 
 		override public void DeserializeFromJSON (JSONNode nodeJSON)

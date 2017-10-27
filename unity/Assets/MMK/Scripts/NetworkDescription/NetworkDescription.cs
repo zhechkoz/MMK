@@ -10,6 +10,7 @@ public class NetworkDescription : MonoBehaviour
 
 		string m_Path = "C:\\Users\\Zhechev\\Documents\\IDP\\MMK\\cityengine-mmk\\export\\MMK_GraphExport.json";
 		Dictionary<string , GameObject> networkItems = new Dictionary<string , GameObject> ();
+		public Dictionary<string, GraphItem> graph = new Dictionary<string, GraphItem> ();
 
 		List<Vector3> xs = new List<Vector3> ();
 		List<Vector3> ys = new List<Vector3> ();
@@ -22,16 +23,41 @@ public class NetworkDescription : MonoBehaviour
 				}
 
 				var json = JSON.Parse (jsonExport);
-				buildNetwork (json);
+				BuildNetwork (json);
+				BuildLaneGraph (json);
 		}
 
-		public GameObject GetNetworkItem (string id)
+		public NetworkItem GetNetworkItem (string id)
 		{
 				GameObject item;
-				return networkItems.TryGetValue (id, out item) ? item : null;
+				return networkItems.TryGetValue (id, out item) ? item.GetComponent<NetworkItem> () : null;
+		}
+        
+        public NetworkLane GetNetworkLane (string id) 
+        {
+                NetworkLane searchedLane = null;
+
+                foreach (GameObject obj in networkItems.Values) {
+                        searchedLane = obj.GetComponent<NetworkItem> ().GetLaneByID(id);
+                        if (searchedLane != null) {
+                            break;
+                        }
+                }
+                
+                return searchedLane;
+        }
+
+		public List<NetworkLane> GetAllLanes() 
+		{
+				List<NetworkLane> allLanes = new List<NetworkLane> ();
+				foreach (GameObject obj in networkItems.Values) {
+						allLanes.AddRange(obj.GetComponent<NetworkItem> ().GetAllLanes());
+				}
+
+				return allLanes;
 		}
 
-		private void buildNetwork (JSONNode root)
+		private void BuildNetwork (JSONNode root)
 		{
 				GameObject networkDescription = new GameObject ("RoadsDescription");
 
@@ -45,6 +71,45 @@ public class NetworkDescription : MonoBehaviour
 						GameObject roadSegment = 
 								CreateGameObject (NetworkComponentType.Node, nodeJSON, networkDescription);
 						networkItems.Add (roadSegment.name, roadSegment);
+				}
+		}
+
+		public void BuildLaneGraph(JSONNode root)
+		{
+				foreach (JSONNode connection in root["connections"].AsArray.Children) {
+						string fromLaneID = connection ["fromLane"];
+						string toLaneID = connection ["toLane"];
+
+						NetworkLane fromLane = GetNetworkLane (fromLaneID);
+						if (fromLane == null) {
+								Debug.Log ("Lane does not exist??!");
+								continue;
+						}
+
+						List<NetworkLane> viaLanes = new List<NetworkLane> ();
+						foreach(string laneID in connection ["via"].AsArray.Children) {
+								NetworkLane viaLane = GetNetworkLane (laneID);
+								if (viaLane == null) {
+										Debug.Log ("viaLane does not exist??!");
+										continue;
+								}
+								viaLanes.Add (viaLane);
+						}
+
+						GraphItem to;
+						if (graph.TryGetValue (fromLaneID, out to)) {
+								to.AppendLane (toLaneID, viaLanes);
+						} else {
+								to = new GraphItem (fromLane);
+								to.AppendLane (toLaneID, viaLanes);
+								graph.Add (fromLaneID, to);
+						}
+				}
+
+				foreach(NetworkLane lane in GetAllLanes()) {
+						if (!graph.ContainsKey (lane.id)) {
+								graph[lane.id] = new GraphItem (lane);
+						}
 				}
 		}
 
@@ -71,13 +136,7 @@ public class NetworkDescription : MonoBehaviour
 				}
 
 				// Debug Lanes
-				if (type == NetworkComponentType.Edge) {
-						NetworkEdge edge = (NetworkEdge)item;
-						DebugDrawLanes (edge.forwardLanes);
-						DebugDrawLanes (edge.backwardLanes);
-				} else {
-						DebugDrawLanes (((NetworkNode)item).lanes);
-				}
+				DebugDrawLanes(item.GetAllLanes());
 
 				return roadElement;
 		}

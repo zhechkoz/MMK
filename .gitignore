@@ -1,7 +1,9 @@
 # CityEngine
+*.obj
 .version.txt 
 .pydevproject
 .project
+bin/
 export/
 images/
 models/

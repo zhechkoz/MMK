@@ -10,13 +10,12 @@ import simplejson as json
 import xml.etree.ElementTree as ET
 import datetime
 import math
-import utm
 import re
 
 # Get a CityEngine instance
 ce = CE()
 
-# Define OSM data location
+# Define SUMO and OSM data location
 osm = 'data/tum-sanitized.osm'
 sumo = 'data/tum-sanitized.net.xml'
 
@@ -34,33 +33,6 @@ cleanupSettings.setMergeNodes(False)
 cleanupSettings.setSnapNodesToSegments(False)
 cleanupSettings.setResolveConflictShapes(True)
 
-osmSettings = OSMImportSettings()
-
-# https://pypi.python.org/pypi/utm
-class CoordinatesConvertor(object):
-    def __init__(self):
-        (authAndCode, _) = ce.getSceneCoordSystem()
-        
-        if authAndCode == None or authAndCode.split(':')[0].strip() != 'EPSG':
-            raise Exception('Map is not in WGS84 coordinates!')
-        
-        code = authAndCode.split(':')[1].strip()[2:]
-        if code[0] == '6':
-            self.northern = True
-        elif code[0] == '7':
-            self.northern = False
-        else:
-            raise Exception('Coordinates code not correct!')
-        
-        self.zoneNumber = int(code[1:])
-        
-    def from_latlon(self, lat, lon):
-        return utm.from_latlon(lat, lon)
-        
-    def to_latlon(self, easting, northing):
-        return utm.to_latlon(abs(easting), abs(northing), self.zoneNumber, northern=self.northern) 
-
-
 class MMKGraph(object):
     def __init__(self):
         self.author = 'TUM - MMK'
@@ -70,6 +42,7 @@ class MMKGraph(object):
         self.segmentCnt = 0
         self.nodes = {}
         self.segments = {}
+        self.connections = {}
         self.OSMOID = {}
    
     def reprJSON(self):
@@ -79,7 +52,8 @@ class MMKGraph(object):
                     nodeCnt=self.nodeCnt, 
                     segementCnt=self.segmentCnt, 
                     nodes=self.nodes.values(), 
-                    segments=self.segments.values()
+                    segments=self.segments.values(),
+                    connections=self.connections.values()
                )
         
     def setNodeCnt(self, nodeCnt):
@@ -99,6 +73,10 @@ class MMKGraph(object):
             raise ValueError('GraphItem should be node or segment')
 
         self.OSMOID.setdefault(item.osmID, []).append(item.OID)
+    
+    def appendGraphConnections(self, connections):
+        for connection in connections:
+            self.connections[connection.id] = connection
    
     def getNode(self, OID):
         return self.nodes.get(OID, None)
@@ -318,7 +296,24 @@ class MMKGraphVertex(object):
                     z=self.z
                )
 
+class MMKGraphConnection(object):
+    def __init__(self, id, fromLane, toLane, via):
+        self.id = id
+        self.fromLane = fromLane
+        self.toLane = toLane
+        self.via = via.split(' ') if via else []
+    
+    def reprJSON(self):
+        dict = { 'id' : self.id, 
+                 'fromLane' : self.fromLane, 
+                 'toLane' : self.toLane
+        }
 
+        if self.via:
+            dict['via'] = self.via
+        return dict              
+     
+               
 class SUMOItem(MMKGraphItem):
     def __init__(self, itemOID, vertices):
         super(SUMOItem, self).__init__(itemOID, vertices)
@@ -410,19 +405,36 @@ def parseGraph(graphLayerName, MMKGraphObj):
             
         MMKGraphObj.appendGraphItem(node)
 
-    # Try to parse SUMO Lanes
+    # Try to parse SUMO Lanes and Connections
     
     sumoFile = ce.toFSPath(sumo)
     if not os.path.isfile(sumoFile):
-        print('WARNING: SUMO file not found! Lane information will not be generated!')
+        print('WARNING: SUMO file not found! Lane information and connections will not be generated!')
     else:
-        edges, nodes = parseSUMONet(sumoFile)
-        MMKGraphObj.collectLanesFromSUMOItems(edges, nodes)
-        
+        sumoNet = ET.parse(sumoFile)
+        sumoRoot = sumoNet.getroot()
 
-def parseSUMONet(sumoFile):
-    sumo = ET.parse(sumoFile)
-    root = sumo.getroot()
+        edges, nodes = parseSUMOLanes(sumoRoot)
+        MMKGraphObj.collectLanesFromSUMOItems(edges, nodes)
+        connections = parseSUMOConnections(sumoRoot)
+        MMKGraphObj.appendGraphConnections(connections)
+        
+def parseSUMOConnections(root):
+    connections = []
+    id = 0
+
+    for connection in root.findall('connection'):
+        connectionAttrib = connection.attrib
+        fromLane = connectionAttrib['from'] + '_' + connectionAttrib['fromLane']
+        toLane = connectionAttrib['to'] + '_' + connectionAttrib['toLane']
+        via = connectionAttrib.get('via', None)
+
+        connectionObject = MMKGraphConnection(id, fromLane, toLane, via)
+        connections.append(connectionObject)
+        id += 1
+    return connections
+
+def parseSUMOLanes(root):
     sumoEdges, sumoNodes = ({}, {})
     junctions = {j.attrib['id'] : j.attrib for j in root.findall('junction')}
 
@@ -570,39 +582,21 @@ def fixIntersectionShapes():
         offset = 2 * (lanesForward - lanesBackward)
         offset = -offset if lanesForward > lanesBackward else offset
         
-        ce.setAttributeSource(intersection, '/ce/street/streetOffset', 'OBJECT')
         oldOffset = int(ce.getAttribute(intersection, 'streetOffset') or 0)
         newOffset = oldOffset + offset
+        ce.setAttributeSource(intersection, '/ce/street/streetOffset', 'OBJECT')
         ce.setAttribute(intersection, 'streetOffset', newOffset)
             
 @noUIupdate
 def prepareScene():
-    print('Cleaning up old imports...')
-    
-    # Delete all old layers
-    layers = ce.getObjectsFrom(ce.scene, ce.isLayer, ce.withName("'osm graph'"))
-    ce.delete(layers)
-    
-    print('Importing OSM data...')
-    
-    osmFile = ce.toFSPath(osm)
-    if not os.path.isfile(osmFile):
-        raise ValueError('OSM file not found!')
-
-    # Import OSM data
-    graphLayers = ce.importFile(osmFile, osmSettings, False)
-        
-    for graphLayer in graphLayers:
-        ce.setName(graphLayer, 'osm graph')
-
     cleanupGraph()
     fixIntersectionShapes()
     cleanupGraph()
     
 if __name__ == '__main__':
-    
+
     print('MMK Streetnetwork Export\n')
-    #prepareScene()
+    prepareScene()
    
     graph = MMKGraph()
     print('Building streetnetwork...')
