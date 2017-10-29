@@ -3,32 +3,34 @@ using System.Collections.Generic;
 using UnityEngine;
 using SimpleJSON;
 
-public abstract class NetworkItem : MonoBehaviour
+namespace MMK.NetworkDescription
 {
-		public string id { get; protected set; }
-		public int osmID { get; protected set; }
-		public string hierarchy { get; protected set; }
-		public List<Vector3> vertices { get; protected set; }
-		public List<NetworkShape> shapes { get; protected set; }
-
-		public abstract NetworkLane GetLaneByID (string id);
-		public abstract List<NetworkLane> GetAllLanes ();
-		public abstract void DeserializeFromJSON (JSONNode nodeJSON);
-
-		protected virtual void Awake()
+		public abstract class NetworkItem : MonoBehaviour
 		{
-				vertices = new List<Vector3> ();
-				shapes = new List<NetworkShape> ();
-		}
+				public string id { get; protected set; }
+				public int osmID { get; protected set; }
+				public string hierarchy { get; protected set; }
+				public List<Vector3> vertices { get; protected set; }
+				public List<NetworkShape> shapes { get; protected set; }
+				public abstract NetworkLane GetLaneByID (string id);
+				public abstract List<NetworkLane> GetAllLanes ();
+				public abstract void DeserializeFromJSON (JSONNode nodeJSON);
 
-		public List<Vector3> GetBoxColliderSizeAndCenter ()
-		{
-				foreach (NetworkShape shape in shapes) {
-						// Only the first shape represents roads
-						if (shape.id.EndsWith (":0")) {
-								return shape.CalculateExtendedAABB ();
-						}
+				protected virtual void Awake ()
+				{
+						vertices = new List<Vector3> ();
+						shapes = new List<NetworkShape> ();
 				}
-				return null;
+
+				public List<Vector3> GetBoxColliderSizeAndCenter ()
+				{
+						foreach (NetworkShape shape in shapes) {
+								// Only the first shape represents roads
+								if (shape.id.EndsWith (":0")) {
+										return shape.CalculateExtendedAABB ();
+								}
+						}
+						return null;
+				}
 		}
 }
