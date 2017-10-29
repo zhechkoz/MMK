@@ -8,8 +8,7 @@ namespace MMK.NetworkDescription
 		{
 				public NetworkLane lane { get; private set; }
 				public List<string> adjacentLanes { get; private set; }
-				private Dictionary<string, List<NetworkLane>> via;
-				public double weight { get { return lane.length; } }
+				public Dictionary<string, List<NetworkLane>> via { get; private set; }
 				public string id { get { return lane.id; } }
 
 				public NetworkLaneConnection (NetworkLane lane)
@@ -19,23 +18,17 @@ namespace MMK.NetworkDescription
 						this.via = new Dictionary<string, List<NetworkLane>> ();
 				}
 
-				// TODO: Dijkstra will return only lanes; this calculation
-				// will be done in car according to the returned lanes
-				/*
-				public List<Vector3> GetPathToLane(string id) 
+				public double Weight(string toLane) 
 				{
-						var path = new List<Vector3> ();
-						path.AddRange (lane.vertices);
-
+						double weight = lane.length;
 						List<NetworkLane> viaLanes;
-						if (via.TryGetValue (id, out viaLanes)) {
-								foreach (NetworkLane viaLane in viaLanes) {
-										path.AddRange (viaLane.vertices);
-								}
+
+						if (via.TryGetValue (toLane, out viaLanes)) {
+								viaLanes.ForEach (lane => weight += lane.length);
 						}
 
-						return path;
-				}*/
+						return weight;
+				}
 
 				public void AppendLane (string id, List<NetworkLane> viaLanes)
 				{

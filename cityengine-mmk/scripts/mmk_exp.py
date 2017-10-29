@@ -243,7 +243,7 @@ class MMKGraphNode(MMKGraphItem):
         super(MMKGraphNode, self).__init__(itemOID, vertices)
         
         self.decodeAttributes(attributesDict)
-        self.corrSegments = neighbours
+        self.neighbourSegments = neighbours
         self.hierarchy = 'unknown'
         self.shapes = []
         self.lanes = []
@@ -257,7 +257,7 @@ class MMKGraphNode(MMKGraphItem):
 
     def reprJSON(self):
         dict = {'hierarchy' : self.hierarchy, 
-                'corrSegments' : self.corrSegments, 
+                'neighbourSegments' : self.neighbourSegments, 
                 'osm' : self.osmID,
         }
         

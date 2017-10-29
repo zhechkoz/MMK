@@ -130,7 +130,7 @@ namespace MMK.NetworkDescription
 						List<NetworkLane> itemLanes = item.GetAllLanes ();
 						itemLanes.ForEach (lane => lanes [lane.id] = lane);
 
-						DebugDrawLanes (itemLanes); // Draws lanes for debug
+						//DebugDrawLanes (itemLanes); // Draws lanes for debug
 
 						return roadElement;
 				}
@@ -139,7 +139,7 @@ namespace MMK.NetworkDescription
 				{
 						var q = new SimplePriorityQueue<NetworkLaneConnection> ();
 						var distances = new Dictionary<string, double> ();
-						var previous = new Dictionary<string, NetworkLane> ();
+						var previous = new Dictionary<string, NetworkLaneConnection> ();
 
 						NetworkLaneConnection start;
 						if (!connectivityGraph.TryGetValue (startID, out start)) {
@@ -153,14 +153,14 @@ namespace MMK.NetworkDescription
 						while (q.Count > 0) {
 								var current = q.Dequeue ();
 								if (current.id == endID) {
-										return BacktrackRoute (current.lane, previous);
+										return BacktrackRoute (current, previous);
 								}
 
 								foreach (string id in current.adjacentLanes) {
-										double newDist = distances [current.id] + current.weight;
+										double newDist = distances [current.id] + current.Weight(id);
 
 										if (!distances.ContainsKey (id) || newDist < distances [id]) {
-												previous [id] = current.lane;
+												previous [id] = current;
 												if (!distances.ContainsKey (id)) {
 														q.Enqueue (connectivityGraph [id], newDist);
 												} else {
@@ -174,17 +174,25 @@ namespace MMK.NetworkDescription
 						return null;
 				}
 
-				private List<NetworkLane> BacktrackRoute (NetworkLane end, Dictionary<string, NetworkLane> previous)
+				private List<NetworkLane> BacktrackRoute (NetworkLaneConnection end, Dictionary<string, NetworkLaneConnection> previous)
 				{
 						var route = new List<NetworkLane> ();
-						route.Add (end);
+						route.Add (end.lane);
 
 						string id = end.id;
-						NetworkLane previousLane;
+						NetworkLaneConnection previousLane;
 
 						while (previous.ContainsKey (id)) {
 								previousLane = previous [id];
-								route.Add (previousLane);
+								List<NetworkLane> viaLanes;
+								if (previousLane.via.TryGetValue(id, out viaLanes)) {
+										viaLanes.Reverse ();
+										foreach (NetworkLane viaLane in viaLanes) {
+												route.Add (viaLane);
+										}
+								}
+
+								route.Add (previousLane.lane);
 								id = previousLane.id;
 						}
 

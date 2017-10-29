@@ -35,7 +35,7 @@ namespace MMK.NetworkDescription
 						JSONArray jsonLanes = nodeJSON ["lanes"].AsArray;
 						JSONArray jsonShapes = nodeJSON ["shapes"].AsArray;
 						JSONArray jsonVertices = nodeJSON ["vertices"].AsArray;
-						JSONArray jsonNeightbors = nodeJSON ["corrSegments"].AsArray;
+						JSONArray jsonNeightbors = nodeJSON ["neighbourSegments"].AsArray;
 
 						foreach (JSONNode jsonVertex in jsonVertices) {
 								float x = jsonVertex ["x"].AsFloat;
