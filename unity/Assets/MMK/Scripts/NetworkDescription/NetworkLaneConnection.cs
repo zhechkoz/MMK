@@ -2,33 +2,24 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class GraphItem {
-		private NetworkLane lane;
-		private List<string> adjacentLanes;
+public class NetworkLaneConnection {
+		public NetworkLane lane { get; private set; }
+		public List<string> adjacentLanes { get; private set; }
 		private Dictionary<string, List<NetworkLane>> via;
 
-		public GraphItem(NetworkLane lane)
+		public double weight { get { return lane.length;} }
+		public string id {get { return lane.id; } }
+
+		public NetworkLaneConnection(NetworkLane lane)
 		{
 				this.lane = lane;
 				this.adjacentLanes = new List<string>();
 				this.via = new Dictionary<string, List<NetworkLane>> ();
 		}
 
-		public double GetWeight() 
-		{
-				return lane.GetLength();
-		}
-
-		public string GetID() 
-		{
-				return lane.id;
-		}
-
-		public List<string> GetAdjacentLanes() 
-		{
-				return adjacentLanes;
-		}
-
+		// TODO: Dijkstra will return only lanes; this calculation
+		// will be done in car according to the returned lanes
+		/*
 		public List<Vector3> GetPathToLane(string id) 
 		{
 				var path = new List<Vector3> ();
@@ -42,7 +33,7 @@ public class GraphItem {
 				}
 
 				return path;
-		}
+		}*/
 
 		public void AppendLane(string id, List<NetworkLane> viaLanes) 
 		{
@@ -56,7 +47,7 @@ public class GraphItem {
 		{
 				string output = lane.id + ": ";
 				foreach (string laneID in adjacentLanes) {
-						output += laneID + ", ";
+						output += laneID + " ";
 				}
 
 				return output;

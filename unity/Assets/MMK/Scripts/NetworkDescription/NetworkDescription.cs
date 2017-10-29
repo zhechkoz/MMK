@@ -2,18 +2,21 @@
 using System.Collections.Generic;
 using UnityEngine;
 using SimpleJSON;
+using Priority_Queue;
 using System.IO;
 
 public class NetworkDescription : MonoBehaviour
 {
-		enum NetworkComponentType { Edge, Node };
+		private enum NetworkComponentType { Edge, Node };
 
 		string m_Path = "C:\\Users\\Zhechev\\Documents\\IDP\\MMK\\cityengine-mmk\\export\\MMK_GraphExport.json";
-		Dictionary<string , GameObject> networkItems = new Dictionary<string , GameObject> ();
-		public Dictionary<string, GraphItem> graph = new Dictionary<string, GraphItem> ();
+		private Dictionary<string , GameObject> networkItems = new Dictionary<string , GameObject> ();
 
-		List<Vector3> xs = new List<Vector3> ();
-		List<Vector3> ys = new List<Vector3> ();
+		private Dictionary<string, NetworkLaneConnection> connectivityGraph = new Dictionary<string, NetworkLaneConnection> ();
+		private Dictionary<string , NetworkLane> lanes = new Dictionary<string , NetworkLane> ();
+
+		private List<Vector3> xs = new List<Vector3> ();
+		private List<Vector3> ys = new List<Vector3> ();
 
 		void Start ()
 		{
@@ -24,38 +27,20 @@ public class NetworkDescription : MonoBehaviour
 
 				var json = JSON.Parse (jsonExport);
 				BuildNetwork (json);
-				BuildLaneGraph (json);
+				BuildConnectivityGraph (json);
 		}
 
-		public NetworkItem GetNetworkItem (string id)
+		public NetworkItem GetNetworkItemByID (string id)
 		{
 				GameObject item;
 				return networkItems.TryGetValue (id, out item) ? item.GetComponent<NetworkItem> () : null;
 		}
         
-        public NetworkLane GetNetworkLane (string id) 
+        public NetworkLane GetLaneByID (string id) 
         {
-                NetworkLane searchedLane = null;
-
-                foreach (GameObject obj in networkItems.Values) {
-                        searchedLane = obj.GetComponent<NetworkItem> ().GetLaneByID(id);
-                        if (searchedLane != null) {
-                            break;
-                        }
-                }
-                
-                return searchedLane;
+				NetworkLane lane;
+				return lanes.TryGetValue(id, out lane) ? lane : null;
         }
-
-		public List<NetworkLane> GetAllLanes() 
-		{
-				List<NetworkLane> allLanes = new List<NetworkLane> ();
-				foreach (GameObject obj in networkItems.Values) {
-						allLanes.AddRange(obj.GetComponent<NetworkItem> ().GetAllLanes());
-				}
-
-				return allLanes;
-		}
 
 		private void BuildNetwork (JSONNode root)
 		{
@@ -74,41 +59,45 @@ public class NetworkDescription : MonoBehaviour
 				}
 		}
 
-		public void BuildLaneGraph(JSONNode root)
+		public void BuildConnectivityGraph (JSONNode root)
 		{
-				foreach (JSONNode connection in root["connections"].AsArray.Children) {
-						string fromLaneID = connection ["fromLane"];
-						string toLaneID = connection ["toLane"];
-
-						NetworkLane fromLane = GetNetworkLane (fromLaneID);
-						if (fromLane == null) {
-								Debug.Log ("Lane does not exist??!");
-								continue;
-						}
+				foreach (JSONNode connectionJSON in root["connections"].AsArray.Children) {
+						string fromLaneID = connectionJSON ["fromLane"];
+						string toLaneID = connectionJSON ["toLane"];
 
 						List<NetworkLane> viaLanes = new List<NetworkLane> ();
-						foreach(string laneID in connection ["via"].AsArray.Children) {
-								NetworkLane viaLane = GetNetworkLane (laneID);
+						foreach(string laneID in connectionJSON ["via"].AsArray.Children) {
+								NetworkLane viaLane = GetLaneByID (laneID);
 								if (viaLane == null) {
-										Debug.Log ("viaLane does not exist??!");
+										Debug.Log ("viaLane does not exist!");
 										continue;
 								}
 								viaLanes.Add (viaLane);
 						}
 
-						GraphItem to;
-						if (graph.TryGetValue (fromLaneID, out to)) {
-								to.AppendLane (toLaneID, viaLanes);
+						NetworkLaneConnection connection;
+						if (connectivityGraph.TryGetValue (fromLaneID, out connection)) {
+								connection.AppendLane (toLaneID, viaLanes);
 						} else {
-								to = new GraphItem (fromLane);
-								to.AppendLane (toLaneID, viaLanes);
-								graph.Add (fromLaneID, to);
-						}
-				}
+								NetworkLane fromLane = GetLaneByID (fromLaneID);
 
-				foreach(NetworkLane lane in GetAllLanes()) {
-						if (!graph.ContainsKey (lane.id)) {
-								graph[lane.id] = new GraphItem (lane);
+								if (fromLane == null) {
+										Debug.Log ("Lane " + fromLaneID + " does not exist!");
+										continue;
+								}
+
+								connection = new NetworkLaneConnection (fromLane);
+								connection.AppendLane (toLaneID, viaLanes);
+								connectivityGraph.Add (fromLaneID, connection);
+						}
+
+						if (!connectivityGraph.ContainsKey (toLaneID)) {
+								NetworkLane toLane = GetLaneByID (toLaneID);
+								if (toLane == null) {
+										Debug.Log ("Lane " + toLaneID + " does not exist!");
+										continue;
+								}
+								connectivityGraph.Add (toLaneID, new NetworkLaneConnection(toLane));
 						}
 				}
 		}
@@ -135,18 +124,67 @@ public class NetworkDescription : MonoBehaviour
 						collider.size = centerSizeBoundingBox [1];	
 				}
 
-				// Debug Lanes
-				DebugDrawLanes(item.GetAllLanes());
+				// Manage Lanes
+				List<NetworkLane> itemLanes = item.GetAllLanes();
+				itemLanes.ForEach(lane => lanes[lane.id] = lane);
+
+				//DebugDrawLanes(itemLanes); // Draws lanes for debug
 
 				return roadElement;
 		}
 
-		private void DebugDrawLanes (List<NetworkLane> lanes)
+		public List<NetworkLane> CalculateRoute (string startID, string endID)
 		{
-				if (lanes == null) {
-						return;
+				var q = new SimplePriorityQueue<NetworkLaneConnection> ();
+				var distances = new Dictionary<string, double> ();
+				var previous = new Dictionary<string, NetworkLane> ();
+
+				var start = connectivityGraph [startID];
+				distances [startID] = 0;
+				q.Enqueue (start, distances [startID]);
+
+				while (q.Count > 0) {
+						var current = q.Dequeue ();
+						if (current.id == endID) {
+								var route = new List<NetworkLane> ();
+								route.Add (current.lane);
+
+								string id = current.id;
+								while (previous.ContainsKey (id)) {
+										NetworkLane previousLane = previous [id];
+										route.Add (previousLane);
+										id = previousLane.id;
+								}
+
+								route.Reverse ();
+								foreach (NetworkLane p in route) {
+										Debug.Log (p.id);
+								}
+
+								return route;
+						}
+
+						foreach (string id in current.adjacentLanes) {
+								double newDist = distances[current.id] + current.weight;
+								double oldDistance;
+
+								if (!distances.TryGetValue(id, out oldDistance) || newDist < oldDistance) {
+										previous [id] = current.lane;
+										if (oldDistance == 0) {
+												q.Enqueue (connectivityGraph [id], newDist);
+										} else {
+												q.TryUpdatePriority (connectivityGraph [id], newDist);
+										}
+										distances [id] = newDist;
+								}
+						}
 				}
 
+				return null;
+		}
+
+		private void DebugDrawLanes (ICollection<NetworkLane> lanes)
+		{
 				foreach (NetworkLane lane in lanes) {
 						List<Vector3> vertices = lane.vertices;
 						Vector3 prev = vertices [0];

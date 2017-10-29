@@ -5,15 +5,21 @@ using SimpleJSON;
 
 public abstract class NetworkItem : MonoBehaviour
 {
-		public string id;
-		public int osmID;
-		public string hierarchy;
-		public List<Vector3> vertices = new List<Vector3> ();
-		public List<NetworkShape> shapes = new List<NetworkShape> ();
+		public string id { get; protected set; }
+		public int osmID { get; protected set; }
+		public string hierarchy { get; protected set; }
+		public List<Vector3> vertices { get; protected set; }
+		public List<NetworkShape> shapes { get; protected set; }
 
 		public abstract NetworkLane GetLaneByID (string id);
 		public abstract List<NetworkLane> GetAllLanes ();
 		public abstract void DeserializeFromJSON (JSONNode nodeJSON);
+
+		protected virtual void Awake()
+		{
+				vertices = new List<Vector3> ();
+				shapes = new List<NetworkShape> ();
+		}
 
 		public List<Vector3> GetBoxColliderSizeAndCenter ()
 		{

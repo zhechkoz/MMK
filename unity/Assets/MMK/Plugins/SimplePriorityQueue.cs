@@ -543,7 +543,7 @@ namespace Priority_Queue
     /// This class is kept here for backwards compatibility.  It's recommended you use SimplePriorityQueue&lt;TItem, TPriority&gt;
     /// </summary>
     /// <typeparam name="TItem">The type to enqueue</typeparam>
-    public class SimplePriorityQueue<TItem> : SimplePriorityQueue<TItem, float>
+	public class SimplePriorityQueue<TItem> : SimplePriorityQueue<TItem, double>
     {
         /// <summary>
         /// Instantiate a new Priority Queue
@@ -553,13 +553,13 @@ namespace Priority_Queue
         /// <summary>
         /// Instantiate a new Priority Queue
         /// </summary>
-        /// <param name="comparer">The comparer used to compare priority values.  Defaults to Comparer&lt;float&gt;.default</param>
-        public SimplePriorityQueue(IComparer<float> comparer) : base(comparer) { }
+        /// <param name="comparer">The comparer used to compare priority values.  Defaults to Comparer&lt;double&gt;.default</param>
+		public SimplePriorityQueue(IComparer<double> comparer) : base(comparer) { }
 
         /// <summary>
         /// Instantiate a new Priority Queue
         /// </summary>
         /// <param name="comparer">The comparison function to use to compare priority values</param>
-        public SimplePriorityQueue(Comparison<float> comparer) : base(comparer) { }
+        public SimplePriorityQueue(Comparison<double> comparer) : base(comparer) { }
     }
 }

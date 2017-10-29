@@ -5,29 +5,29 @@ using SimpleJSON;
 
 public class NetworkEdge : NetworkItem
 {
-		public string start;
-		public string end;
-		public double length;
-		public double maxSpeed;
-		public bool oneway;
-		public List<NetworkLane> forwardLanes = new List<NetworkLane> ();
-		public List<NetworkLane> backwardLanes = new List<NetworkLane> ();
+		public string start { get; private set; }
+		public string end { get; private set; }
+		public double length { get; private set; }
+		public double maxSpeed { get; private set; }
+		public bool oneway { get; private set; }
+		public List<NetworkLane> forwardLanes { get; private set; }
+		public List<NetworkLane> backwardLanes { get; private set; }
+
+		protected override void Awake()
+		{
+				base.Awake ();
+				forwardLanes = new List<NetworkLane> ();
+				backwardLanes = new List<NetworkLane> ();
+		}
 
 		override public NetworkLane GetLaneByID (string id)
 		{
-				foreach (NetworkLane lane in forwardLanes) {
-						if (lane.id == id) {
-								return lane;
-						}
+				NetworkLane searchedLane = forwardLanes.Find(lane => lane.id == id);
+				if (searchedLane == null) {
+						searchedLane = backwardLanes.Find(lane => lane.id == id);
 				}
 
-				foreach (NetworkLane lane in backwardLanes) {
-						if (lane.id == id) {
-								return lane;
-						}
-				}
-
-				return null;
+				return searchedLane;
 		}
 
 		override public List<NetworkLane> GetAllLanes () {
@@ -60,27 +60,20 @@ public class NetworkEdge : NetworkItem
 						float z = jsonVertex ["z"].AsFloat;
 						vertices.Add (new Vector3 (x, y, z));
 				}
-
-				if (jsonShapes != null) {
-						foreach (JSONNode shapeJSON in jsonShapes.Children) {
-								NetworkShape shape = NetworkShape.DeserializeFromJSON (shapeJSON); 
-								this.shapes.Add (shape);
-						}
+						
+				foreach (JSONNode shapeJSON in jsonShapes.Children) {
+						NetworkShape shape = NetworkShape.DeserializeFromJSON (shapeJSON); 
+						this.shapes.Add (shape);
 				}
-
-				if (jsonForward != null) {
-						foreach (JSONNode laneJSON in jsonForward.Children) {
-								NetworkLane lane = NetworkLane.DeserializeFromJSON (laneJSON);
-								this.forwardLanes.Add (lane);
-						}
+						
+				foreach (JSONNode laneJSON in jsonForward.Children) {
+						NetworkLane lane = NetworkLane.DeserializeFromJSON (laneJSON);
+						this.forwardLanes.Add (lane);
 				}
-
-				if (jsonBackward != null) {
-						foreach (JSONNode laneJSON in jsonBackward.Children) {
-								NetworkLane lane = NetworkLane.DeserializeFromJSON (laneJSON);
-								this.backwardLanes.Add (lane);
-						}
+						
+				foreach (JSONNode laneJSON in jsonBackward.Children) {
+						NetworkLane lane = NetworkLane.DeserializeFromJSON (laneJSON);
+						this.backwardLanes.Add (lane);
 				}
 		}
-	
 }

@@ -5,18 +5,18 @@ using SimpleJSON;
 
 public class NetworkNode : NetworkItem
 {
-		public List<string> neighbourSegments;
+		public List<string> neighbourSegments { get; private set; }
 		private List<NetworkLane> lanes = new List<NetworkLane> ();
+
+		protected override void Awake()
+		{
+				base.Awake ();
+				neighbourSegments = new List<string> ();
+		}
 
 		override public NetworkLane GetLaneByID (string id)
 		{
-				foreach (NetworkLane lane in lanes) {
-						if (lane.id == id) {
-								return lane;
-						}
-				}
-
-				return null;
+				return lanes.Find (lane => lane.id == id);
 		}
 
 		override public List<NetworkLane> GetAllLanes () 
@@ -33,6 +33,7 @@ public class NetworkNode : NetworkItem
 				JSONArray jsonLanes = nodeJSON ["lanes"].AsArray;
 				JSONArray jsonShapes = nodeJSON ["shapes"].AsArray;
 				JSONArray jsonVertices = nodeJSON ["vertices"].AsArray;
+				JSONArray jsonNeightbors = nodeJSON ["corrSegments"].AsArray;
 
 				foreach (JSONNode jsonVertex in jsonVertices) {
 						float x = jsonVertex ["x"].AsFloat;
@@ -41,18 +42,18 @@ public class NetworkNode : NetworkItem
 						this.vertices.Add (new Vector3 (x, y, z));
 				}
 
-				if (jsonShapes != null) {
-						foreach (JSONNode shapeJSON in jsonShapes.Children) {
-								NetworkShape shape = NetworkShape.DeserializeFromJSON (shapeJSON); 
-								this.shapes.Add (shape);
-						}
+				foreach (JSONString neighbour in jsonNeightbors) {
+						neighbourSegments.Add (neighbour);
 				}
 						
-				if (jsonLanes != null) {
-						foreach (JSONNode laneJSON in jsonLanes.Children) {
-								NetworkLane lane = NetworkLane.DeserializeFromJSON (laneJSON);
-								this.lanes.Add (lane);
-						}
+				foreach (JSONNode shapeJSON in jsonShapes.Children) {
+						NetworkShape shape = NetworkShape.DeserializeFromJSON (shapeJSON); 
+						this.shapes.Add (shape);
+				}
+						
+				foreach (JSONNode laneJSON in jsonLanes.Children) {
+						NetworkLane lane = NetworkLane.DeserializeFromJSON (laneJSON);
+						this.lanes.Add (lane);
 				}
 		}
 }

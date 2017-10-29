@@ -5,31 +5,21 @@ using SimpleJSON;
 
 public class NetworkLane
 {
-		public string id;
-		private int index;
-		private double length;
-		public List<Vector3> vertices = new List<Vector3> ();
+		public string id { get; protected set; }
+		public int index { get; protected set; }
+		public double length { get; protected set; }
+		public List<Vector3> vertices { get; protected set; }
 
 		public NetworkLane (string id, int index, double length)
 		{
 				this.id = id;
 				this.index = index;
 				this.length = length;
-		}
-
-		public double GetLength ()
-		{
-				return length;
-		}
-
-		public int GetIndex ()
-		{
-				return index;
+				vertices = new List<Vector3> ();
 		}
 
 		public static NetworkLane DeserializeFromJSON (JSONNode laneJSON)
 		{
-				
 				string id = laneJSON ["id"];
 				int index = laneJSON ["lane"];
 				double length = laneJSON ["length"];

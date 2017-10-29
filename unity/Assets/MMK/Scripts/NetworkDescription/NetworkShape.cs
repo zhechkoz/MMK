@@ -5,28 +5,13 @@ using SimpleJSON;
 
 public class NetworkShape
 {
-		public string id;
-		public List<Vector3> vertices = new List<Vector3> ();
+		public string id { get; protected set; }
+		public List<Vector3> vertices { get; protected set; }
 
 		public NetworkShape (string id)
 		{
 				this.id = id;
-		}
-
-		public static NetworkShape DeserializeFromJSON (JSONNode shapeJSON)
-		{
-				string id = shapeJSON ["id"];
-				NetworkShape shape = new NetworkShape (id);
-
-				JSONArray jsonVertices = shapeJSON ["vertices"].AsArray;
-				foreach (JSONNode jsonVertex in jsonVertices) {
-						float x = jsonVertex ["x"].AsFloat;
-						float y = jsonVertex ["y"].AsFloat;
-						float z = jsonVertex ["z"].AsFloat;
-						shape.vertices.Add (new Vector3 (x, y, z));
-				}
-
-				return shape;
+				vertices = new List<Vector3> ();
 		}
 
 		public List<Vector3> CalculateExtendedAABB ()
@@ -46,5 +31,21 @@ public class NetworkShape
 				Vector3 center = new Vector3 (min.x + d.x / 2.0f, min.y + d.y / 2.0f, min.z + d.z / 2.0f);
 				d.y += 2; // Make sure the box is big enough so the car can trigger the collider
 				return new List<Vector3> () { center, d }; 
+		}
+
+		public static NetworkShape DeserializeFromJSON (JSONNode shapeJSON)
+		{
+				string id = shapeJSON ["id"];
+				NetworkShape shape = new NetworkShape (id);
+
+				JSONArray jsonVertices = shapeJSON ["vertices"].AsArray;
+				foreach (JSONNode jsonVertex in jsonVertices) {
+						float x = jsonVertex ["x"].AsFloat;
+						float y = jsonVertex ["y"].AsFloat;
+						float z = jsonVertex ["z"].AsFloat;
+						shape.vertices.Add (new Vector3 (x, y, z));
+				}
+
+				return shape;
 		}
 }
