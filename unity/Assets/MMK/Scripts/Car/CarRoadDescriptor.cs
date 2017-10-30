@@ -15,6 +15,7 @@ namespace MMK.Car
 				bool beenThere = true;
 				Network description;
 				List<Vector3> xs = new List<Vector3> ();
+				Vector3 aim = new Vector3 (206, 1, 235);
 
 				void Start ()
 				{
@@ -25,11 +26,11 @@ namespace MMK.Car
 				{
 						NetworkLane currentLane = null;
 						NetworkItem currentItem = null;
-						CurrentRoadInformation (out currentLane, out currentItem);
+						CurrentRoadPosition (out currentLane, out currentItem);
 						Debug.Log (currentLane == null ? "No Lane" : currentLane.id);
 
 						if (beenThere) {
-								CalculateRouteTo (new Vector3 (30, 1, 30));
+								CalculateRouteTo (aim);
 								beenThere = false;
 						}
 				}
@@ -38,8 +39,10 @@ namespace MMK.Car
 				{
 						NetworkLane currentLane;
 						NetworkItem item;
-						CurrentRoadInformation (out currentLane, out item);
+						CurrentRoadPosition (out currentLane, out item);
 
+						// Calculate the nearest lane to the destination by checking
+						// whether it intersects any BoxColliders which belong to a NetworkItems.
 						var destinationNetworItems = new List<NetworkItem> ();
 						foreach (var collider in Physics.OverlapBox (destination, Vector3.one)) {
 								item = collider.gameObject.GetComponent<NetworkItem> ();
@@ -49,18 +52,20 @@ namespace MMK.Car
 						}
 
 						NetworkLane destinationLane;
-						RoadInformation (destination, destinationNetworItems, out destinationLane, out item);
+						RoadPosition (destination, destinationNetworItems, out destinationLane, out item);
 						if (destinationLane == null) {
 								Debug.Log ("Destination not on road!");
 								return null;
 						}
 
+						// Calculate route lanes by using the CalculateRoute method in Network.
 						List<NetworkLane> routeLanes = description.CalculateRoute (currentLane.id, destinationLane.id);
 						if (routeLanes == null) {
 								Debug.Log ("No route to destination!");
 								return null;
 						}
 
+						// Finally calculate the drivable points from the correct lanes
 						List<Vector3> routePoints = ExtractRoutePoints (routeLanes, transform.position, destination);
 
 						// Debug route
@@ -72,33 +77,42 @@ namespace MMK.Car
 				private List<Vector3> ExtractRoutePoints (List<NetworkLane> routeLanes, Vector3 start, Vector3 end)
 				{
 						var result = new List<Vector3> ();
-						var currentPosition = MMKExtensions.ToVector2 (start);
-						var destinationPosition = MMKExtensions.ToVector2 (end);
+						var startPosition = MMKExtensions.ToVector2 (start);
+						var endPosition = MMKExtensions.ToVector2 (end);
 
+						// Traverse all lanes and add their vertices to result;
+						// Start and End lane are processed in the following different way:
+						// We remove all vertices behind the start position and after the
+						// end position.
 						for (int i = 0; i < routeLanes.Count; i++) {
-								var vertices = new List<Vector3>(routeLanes [i].vertices);
-								if (i == 0) {
-										int j = 0;
-										for (; j < vertices.Count - 1; j++) {
-												var laneA = MMKExtensions.ToVector2 (vertices [j]);
-												var laneB = MMKExtensions.ToVector2 (vertices [j + 1]);
-												if (Vector2.Dot (laneB - laneA, currentPosition - laneA) < 0) {
-														break;
-												}
-										}
-										vertices.RemoveRange (0, j);
-								} 
+								var vertices = routeLanes [i].vertices;
 
-								if (i == routeLanes.Count - 1) {
-										int j = 0;
-										for (; j < vertices.Count - 1; j++) {
-												var laneA = MMKExtensions.ToVector2 (vertices [j]);
-												var laneB = MMKExtensions.ToVector2 (vertices [j + 1]);
-												if (Vector2.Dot (laneB - laneA, destinationPosition - laneA) < 0) {
-														break;
+								// Check if we handle the first or last lane 
+								if (i == 0 || i == routeLanes.Count - 1) {
+										// If so, make a copy of the lane's vertices
+										vertices = new List<Vector3> (routeLanes [i].vertices);
+										int j;
+										if (i == 0) {
+												for (j = 0; j < vertices.Count - 1; j++) {
+														var laneA = MMKExtensions.ToVector2 (vertices [j]);
+														var laneB = MMKExtensions.ToVector2 (vertices [j + 1]);
+														if (Vector2.Dot (laneB - laneA, startPosition - laneA) < 0) {
+																break; // Start already is after/at laneA-laneB line 
+														}
 												}
+												vertices.RemoveRange (0, j); // Remove all vertices which are behind the start
+										} 
+
+										if (i == routeLanes.Count - 1) {
+												for (j = 0; j < vertices.Count - 1; j++) {
+														var laneA = MMKExtensions.ToVector2 (vertices [j]);
+														var laneB = MMKExtensions.ToVector2 (vertices [j + 1]);
+														if (Vector2.Dot (laneB - laneA, endPosition - laneA) < 0) {
+																break; // End is already behind/at laneA-laneB line
+														}
+												}
+												vertices.RemoveRange (j, vertices.Count - j); // Remove all vertices which are after the end
 										}
-										vertices.RemoveRange (j, vertices.Count - j);
 								}
 								result.AddRange (vertices); 
 						}
@@ -106,14 +120,15 @@ namespace MMK.Car
 						return result;
 				}
 
-				public void RoadInformation (Vector3 position, ICollection<NetworkItem> possibleItems, 
-				                            out NetworkLane networkLane, out NetworkItem networkItem)
+				public void RoadPosition (Vector3 position, ICollection<NetworkItem> possibleItems, 
+				                          out NetworkLane networkLane, out NetworkItem networkItem)
 				{
 						var currentPosition = MMKExtensions.ToVector2 (position);
 						float minimalDistance = float.MaxValue;
 						networkItem = null;
 						networkLane = null;
 
+						// Traverse all lanes and find the nearest
 						foreach (NetworkItem item in possibleItems) {
 								foreach (NetworkLane lane in item.GetAllLanes ()) {
 										List<Vector3> vertices = lane.vertices;
@@ -131,10 +146,10 @@ namespace MMK.Car
 						}
 				}
 
-				public void CurrentRoadInformation (out NetworkLane networkLane, out NetworkItem networkItem)
+				public void CurrentRoadPosition (out NetworkLane networkLane, out NetworkItem networkItem)
 				{
 						var currentItems = currentRoads.Values;
-						RoadInformation (transform.position, currentItems, out networkLane, out networkItem);
+						RoadPosition (transform.position, currentItems, out networkLane, out networkItem);
 				}
 
 				void OnTriggerEnter (Collider other)
@@ -157,11 +172,13 @@ namespace MMK.Car
 
 				void OnDrawGizmos ()
 				{
-						Color red = Color.red;
-						Gizmos.color = red;
+						Gizmos.color = Color.red;
 						for (int i = 0; i < xs.Count; i++) {
 								Gizmos.DrawSphere (xs [i], 1.5f);	
 						}
+								
+						Gizmos.color = Color.blue;
+						Gizmos.DrawSphere (aim, 1.5f);
 				}
 		}
 }

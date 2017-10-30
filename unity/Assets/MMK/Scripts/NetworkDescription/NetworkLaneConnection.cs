@@ -22,7 +22,7 @@ namespace MMK.NetworkDescription
 				{
 						double weight = lane.length;
 						List<NetworkLane> viaLanes;
-
+						// Lane's own length + possible via lanes to the adjacent lane
 						if (via.TryGetValue (toLane, out viaLanes)) {
 								viaLanes.ForEach (lane => weight += lane.length);
 						}
