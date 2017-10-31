@@ -23,13 +23,15 @@ roads = {'motorway' : Road(maxspeed = 130, lanes = 6),
          'unclassified' : Road(maxspeed = 50, lanes = 2),
          'residential' : Road(maxspeed = 50, lanes = 2),
          'living_street' : Road(maxspeed = 25, lanes = 2),
-         'unsurfaced' : Road(maxspeed = 20, lanes = 2)
+         'unsurfaced' : Road(maxspeed = 20, lanes = 2),
+         'service' : Road(maxspeed = 20, lanes = 2)
 }
 
 def sanitize(xml):
     for way in xml.findall('way'): 
         tags = dict([(tag.get('k'), tag.get('v')) for tag in way.findall('tag')])
-        if 'highway' in tags.keys():
+
+        if 'highway' in tags:
             if not (tags['highway'] in roads):
                 xml.remove(way)
             else:
@@ -55,14 +57,16 @@ def sanitize(xml):
                         lanes = roads[highway].lanes
                     
                     ET.SubElement(way, 'tag', attrib={'k' : 'lanes', 'v' : str(lanes)})
-        elif 'building' in tags.keys() and tags['building'] == 'yes':
+        elif 'building' in tags and tags['building'] == 'yes':
+            pass
+        elif 'amenity' in tags and tags['amenity'] == 'parking':
             pass
         else:
             xml.remove(way)
                     
     for relation in xml.findall('relation'): 
         tags = dict([(tag.get('k'), tag.get('v')) for tag in way.findall('tag')])
-        if 'highway' in tags.keys() and not (tags['highway'] in roads):
+        if 'highway' in tags and not (tags['highway'] in roads):
             xml.remove(relation)
 
 if __name__ == '__main__':
