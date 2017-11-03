@@ -74,6 +74,11 @@ class SUMOEdge(SUMOGraphItem):
         self.start = start
         self.end = end
         self.lanes = {}
+    
+    def transform(self, dx, dy, dz):  
+        super(SUMOEdge, self).transform(dx, dy, dz)
+        for lane in self.lanes.values():
+            lane.transform(dx, dy, dz)
 
     def appendLane(self, id, vertices, index, length):
         lane = SUMOLane(id, vertices, index, length)
@@ -85,6 +90,11 @@ class SUMONode(SUMOGraphItem):
         super(SUMONode, self).__init__(id, vertices)
         self.hierarchy = hierarchy
         self.lanes = {}
+    
+    def transform(self, dx, dy, dz):  
+        super(SUMONode, self).transform(dx, dy, dz)
+        for lane in self.lanes.values():
+            lane.transform(dx, dy, dz)
 
     def appendLane(self, id, vertices, index, length):
         lane = SUMOLane(id, vertices, index, length)

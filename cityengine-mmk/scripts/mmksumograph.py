@@ -16,9 +16,6 @@ class SUMOGraph(object):
             for items in subList:
                 for item in items:
                     item.transform(dx, dy, dz)
-
-        for item in self.lanes.values():
-            item.transform(dx, dy, dz)
     
     def reprJSON(self):
         dict = { 'connections' : self.connections,

@@ -67,12 +67,15 @@ class MMKExporter(object):
             connections = self.parseSUMOConnections(sumoRoot)
             self.sumoGraph.connections = connections
             
-            # Order lanes to corresponding segments and nodes
-            self.sumoGraph.lanes = self.ceGraph.collectLanesFromSUMOItems(edges, nodes)
-            
             # Fix SUMO coordinates to line up with Unity
+            # Because of the used heuristic in collectLanesFromSUMOItems we
+            # have to fix the coordinates of all SUMO items (especially lanes)
             self.determineSUMOOffset()
             self.sumoGraph.translateCoordinates(self.sumoox, 0, self.sumooz)
+
+            # Order lanes to corresponding segments and nodes
+            self.sumoGraph.lanes = self.ceGraph.collectLanesFromSUMOItems(edges, nodes)
+
 
     def parseCEGraphSegments(self):
         parsedSegments = []
@@ -275,7 +278,8 @@ if __name__ == '__main__':
     osm = 'data/tum-sanitized.osm'
     sumo = 'data/tum-sanitized.net.xml'
 
-    # Define center coordinates
+    # Define export center coordinates; These has to be the same
+    # as in the "Export Models..." dialog in CityEngine
     ox = 690985
     oz = 5336220
     
