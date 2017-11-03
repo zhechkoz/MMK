@@ -11,14 +11,11 @@ namespace MMK.NetworkDescription
 		{
 				private enum NetworkComponentType { Edge, Node };
 
-				string m_Path = "C:\\Users\\Zhechev\\Documents\\IDP\\MMK\\cityengine-mmk\\export\\MMK_GraphExport.json";
+				string m_Path = "Path_To_Export";
 				private Dictionary<string , GameObject> networkItems = new Dictionary<string , GameObject> ();
 
 				private Dictionary<string, NetworkLaneConnection> connectivityGraph = new Dictionary<string, NetworkLaneConnection> ();
 				private Dictionary<string , NetworkLane> lanes = new Dictionary<string , NetworkLane> ();
-
-				private List<Vector3> xs = new List<Vector3> ();
-				private List<Vector3> ys = new List<Vector3> ();
 
 				void Start ()
 				{
@@ -131,10 +128,6 @@ namespace MMK.NetworkDescription
 								collider.size = centerSizeBoundingBox [1];	
 						}
 
-						// Draws lanes for debug
-						List<NetworkLane> itemLanes = item.GetAllLanes ();
-						DebugDrawLanes (itemLanes); 
-
 						return roadElement;
 				}
 
@@ -202,31 +195,6 @@ namespace MMK.NetworkDescription
 						route.Reverse ();
 
 						return route;
-				}
-
-				private void DebugDrawLanes (ICollection<NetworkLane> lanes)
-				{
-						foreach (NetworkLane lane in lanes) {
-								List<Vector3> vertices = lane.vertices;
-								Vector3 prev = vertices [0];
-								Vector3 next;
-
-								for (int i = 1; i < vertices.Count; i++) {
-										next = vertices [i];
-										xs.Add (next);
-										ys.Add (prev);
-										prev = next;
-								}
-						}
-				}
-
-				void OnDrawGizmos ()
-				{
-						Color red = new Color (1f, 0f, 0f);
-						Gizmos.color = red;
-						for (int i = 0; i < xs.Count; i++) {
-								Gizmos.DrawLine (xs [i], ys [i]);	
-						}
 				}
 		}
 }

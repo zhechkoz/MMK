@@ -11,28 +11,11 @@ namespace MMK.Car
 		public class CarRoadDescriptor : MonoBehaviour
 		{
 				private Dictionary<string, NetworkItem> currentRoads = new Dictionary<string, NetworkItem> ();
-
-				bool beenThere = true;
 				Network description;
-				List<Vector3> xs = new List<Vector3> ();
-				Vector3 aim = new Vector3 (206, 1, 235);
 
 				void Start ()
 				{
 						description = GameObject.Find ("tum_0").GetComponent<Network> ();
-				}
-
-				void Update ()
-				{
-						NetworkLane currentLane = null;
-						NetworkItem currentItem = null;
-						CurrentRoadPosition (out currentLane, out currentItem);
-						Debug.Log (currentLane == null ? "No Lane" : currentLane.id);
-
-						if (beenThere) {
-								CalculateRouteTo (aim);
-								beenThere = false;
-						}
 				}
 
 				public List<Vector3> CalculateRouteTo (Vector3 destination)
@@ -67,9 +50,6 @@ namespace MMK.Car
 
 						// Finally calculate the drivable points from the correct lanes
 						List<Vector3> routePoints = ExtractRoutePoints (routeLanes, transform.position, destination);
-
-						// Debug route
-						xs.AddRange (routePoints);
 
 						return routePoints;
 				}
@@ -168,17 +148,6 @@ namespace MMK.Car
 						if (currentRoads.ContainsKey (id)) {
 								currentRoads.Remove (id);
 						}
-				}
-
-				void OnDrawGizmos ()
-				{
-						Gizmos.color = Color.red;
-						for (int i = 0; i < xs.Count; i++) {
-								Gizmos.DrawSphere (xs [i], 1.5f);	
-						}
-								
-						Gizmos.color = Color.blue;
-						Gizmos.DrawSphere (aim, 1.5f);
 				}
 		}
 }
