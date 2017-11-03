@@ -23,7 +23,8 @@ class MMKGraphItem(object):
     def appendVertex(self, x, y, z):
         vertex = MMKGraphVertex(x, y, z)
         self.vertices.append(vertex)
-
+    
+    # Has to be overriden by all children
     def transform(self, dx, dy, dz):
         pass
 
@@ -114,6 +115,7 @@ class SUMOLane(SUMOGraphItem):
         dict.update(super(SUMOLane, self).reprJSON())
         return dict
 
+
 class CEGraphItem(MMKGraphItem):
     def __init__(self, id, vertices, osmID):
         super(CEGraphItem, self).__init__(id, vertices)
@@ -138,7 +140,8 @@ class CEGraphItem(MMKGraphItem):
         dict = {'osm' : self.osmID}
         dict.update(super(CEGraphItem, self).reprJSON())
         return dict
-        
+   
+   
 class CEGraphSegment(CEGraphItem):
     def __init__(self, id, vertices, osmID, neighbours, hierarchy=None, oneway=None, maxspeed=None):
         super(CEGraphSegment, self).__init__(id, vertices, osmID)

@@ -23,6 +23,7 @@ class SUMOGraph(object):
         }
         return dict
 
+
 class SUMOGraphConnection(object):
     def __init__(self, id, fromLane, toLane, via):
         self.id = id

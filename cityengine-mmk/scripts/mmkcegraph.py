@@ -54,7 +54,8 @@ class CEGraph(object):
                 # Node was deleted during CE cleanup process so
                 # try to find the nearest node which exists and append the
                 # lanes information. 
-                # Important: User has to match the CE model
+                # IMPORTANT: User may have to correct the CE model to correspond
+                # to SUMO shapes manually.
                 missingNode = nodes[0]
                 minDistance = sys.maxint
                 for node in self.nodes.values():

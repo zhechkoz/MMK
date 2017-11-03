@@ -67,15 +67,16 @@ class MMKExporter(object):
             connections = self.parseSUMOConnections(sumoRoot)
             self.sumoGraph.connections = connections
             
-            # Fix SUMO coordinates to line up with Unity
-            # Because of the used heuristic in collectLanesFromSUMOItems we
+            # Fix SUMO coordinates to line up with Unity.
+            # Because of the used heuristic in collectLanesFromSUMOItems to
+            # match lanes of deleted vertices to their neares neighbour, we
             # have to fix the coordinates of all SUMO items (especially lanes)
+            # before collecting the lanes.
             self.determineSUMOOffset()
             self.sumoGraph.translateCoordinates(self.sumoox, 0, self.sumooz)
 
             # Order lanes to corresponding segments and nodes
             self.sumoGraph.lanes = self.ceGraph.collectLanesFromSUMOItems(edges, nodes)
-
 
     def parseCEGraphSegments(self):
         parsedSegments = []
@@ -120,7 +121,6 @@ class MMKExporter(object):
                     item = CEGraphItem(ce.getOID(s), ce.getVertices(s), ce.getAttribute(s, 'osm_id')) 
                     parsedItems[item.id] = item 
         return parsedItems
-        
 
     def parseSUMOConnections(self, root):
         connections = []
@@ -136,7 +136,6 @@ class MMKExporter(object):
             connections.append(connectionObject)
             id += 1
         return connections
-        
 
     def parseSUMOItems(self, root):
         sumoEdges, sumoNodes = ({}, {})
@@ -228,7 +227,8 @@ class MMKExporter(object):
             oneway = ce.getAttribute(intersection, 'oneway') == 'yes'
             lanesForward = ce.getAttribute(intersection, 'lanes:forward')
             lanesBackward = int(ce.getAttribute(intersection, 'lanes:backward') or 0)
-
+            
+            # Center junction according to number of lanes
             if not lanesForward:
                 if oneway:
                     lanesForward = lanesBackward = lanes
@@ -279,10 +279,18 @@ if __name__ == '__main__':
     sumo = 'data/tum-sanitized.net.xml'
 
     # Define export center coordinates; These has to be the same
-    # as in the "Export Models..." dialog in CityEngine
+    # as in the "Export Models..." dialog in CityEngine.
     ox = 690985
     oz = 5336220
     
+    # If the program cannot find the SUMO objetcts' offsets
+    # automatically by calculating the translation between 
+    # corresponding nodes determineSUMOOffset(), then the
+    # following two values has to be defined by the user and
+    # passed to the exporter object.
+    sumoox = 0
+    sumooz = 0
+
     print('MMK Streetnetwork Export')
     exporter = MMKExporter('TUM - MMK', osm, sumo, ox, oz)
     
