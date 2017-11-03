@@ -14,7 +14,7 @@ namespace MMK.NetworkDescription
 				public List<NetworkShape> shapes { get; protected set; }
 				public abstract NetworkLane GetLaneByID (string id);
 				public abstract List<NetworkLane> GetAllLanes ();
-				public abstract void DeserializeFromJSON (JSONNode nodeJSON);
+				public abstract void DeserializeFromJSON (JSONNode nodeJSON, Dictionary<string , NetworkLane> lanes);
 
 				protected virtual void Awake ()
 				{

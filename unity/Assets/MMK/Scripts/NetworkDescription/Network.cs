@@ -46,6 +46,11 @@ namespace MMK.NetworkDescription
 
 				private void BuildNetwork (JSONNode root)
 				{
+						foreach (JSONNode laneJSON in root ["lanes"].AsArray.Children) {
+								NetworkLane lane = NetworkLane.DeserializeFromJSON (laneJSON);
+								lanes [lane.id] = lane;
+						}
+
 						GameObject networkDescription = new GameObject ("RoadsDescription");
 
 						foreach (JSONNode segmentJSON in root ["segments"].AsArray.Children) {
@@ -114,7 +119,7 @@ namespace MMK.NetworkDescription
 								item = roadElement.AddComponent<NetworkNode> ();
 						}
 
-						item.DeserializeFromJSON (jsonData);
+						item.DeserializeFromJSON (jsonData, lanes);
 						roadElement.name = item.id;
 						roadElement.transform.parent = parent.transform;
 						List<Vector3> centerSizeBoundingBox = item.GetBoxColliderSizeAndCenter ();
@@ -126,11 +131,9 @@ namespace MMK.NetworkDescription
 								collider.size = centerSizeBoundingBox [1];	
 						}
 
-						// Manage Lanes
+						// Draws lanes for debug
 						List<NetworkLane> itemLanes = item.GetAllLanes ();
-						itemLanes.ForEach (lane => lanes [lane.id] = lane);
-
-						//DebugDrawLanes (itemLanes); // Draws lanes for debug
+						DebugDrawLanes (itemLanes); 
 
 						return roadElement;
 				}

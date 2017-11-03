@@ -26,7 +26,7 @@ namespace MMK.NetworkDescription
 						return lanes;	
 				}
 
-				override public void DeserializeFromJSON (JSONNode nodeJSON)
+				override public void DeserializeFromJSON (JSONNode nodeJSON, Dictionary<string , NetworkLane> lanes)
 				{
 						this.id = nodeJSON ["id"];
 						this.osmID = nodeJSON ["osm"].AsInt;
@@ -53,9 +53,11 @@ namespace MMK.NetworkDescription
 								this.shapes.Add (shape);
 						}
 						
-						foreach (JSONNode laneJSON in jsonLanes.Children) {
-								NetworkLane lane = NetworkLane.DeserializeFromJSON (laneJSON);
-								this.lanes.Add (lane);
+						foreach (JSONString laneID in jsonLanes.Children) {
+								NetworkLane lane;
+								if (lanes.TryGetValue (laneID, out lane)) {
+										this.lanes.Add (lane);
+								}
 						}
 				}
 		}
