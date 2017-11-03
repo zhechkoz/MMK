@@ -1,0 +1,541 @@
+/**
+ * File:    Building_From_OpenStreetMap.cga
+ * Created: 26 Jul 2016 13:24:57 GMT
+ * Author:  Esri R&D Center Zurich
+ */
+
+version "2016.1"
+
+
+@Hidden(Eave_Ht, Ridge_Ht, Building_Form, Roof_Form, Floor_Ht, RoofColor, OverwriteColor, Representation, Transparency)
+import Building_From_Footprint: "rules/Buildings/Building_From_Footprint.cga" (Eave_Ht=Eave_Ht, Ridge_Ht=Ridge_Ht, Building_Form=Building_Form, Roof_Form=Roof_Form, Floor_Ht=Floor_Ht, RoofColor=RoofColor, Representation=Representation, Transparency=Transparency)
+@Hidden
+import Color_Names:"rules/General/Color_Names.cga"
+
+
+// ------------------------------
+// Attributes
+// ------------------------------
+
+@Group("Calculated Attributes", 0)
+
+// calculate these attributes from object attributes or set to default
+@Order(1)
+attr Levels 		= _getLevels
+@Order(2)
+attr Eave_Ht 		= _getEaveHeight
+@Order(3)
+attr Ridge_Ht 		= _getRidgeHeight
+@Order(4) @Range("extrusion", "setback top", "setback facade", "setback base", "setback everywhere")
+attr Building_Form 	= _getBuildingForm
+@Order(5) @Range("flat", "shed", "gable", "half-hip", "hip", "pyramid", "gambrel", "mansard", "dome", "onion", "round", "saltbox")
+attr Roof_Form 		= _getRoofForm
+@Order(6)
+attr Floor_Ht 		= _getFloorHeight
+@Order(7) @Color
+attr BuildingColor 	= _getBuildingColor
+@Order(8) @Color
+attr RoofColor 		= _getRoofColor
+
+@Group("Visualization Options", 1)
+
+@Order(1) @Range("realistic with facade textures", "schematic facades", "solid color")
+attr Representation = estimatedRepresentation
+@Order(2) @Range(0,1)
+attr Transparency 	= 0
+
+
+// ------------------------------
+// Hidden Attributes
+// ------------------------------
+
+@Group("From Object Attributes", 2)
+
+// from object attributes
+@Hidden
+attr height = -1
+@Hidden
+attr building__levels = -1
+@Hidden
+attr roof__height = -1
+@Hidden
+attr roof__shape = ""
+@Hidden
+attr building__colour = ""
+@Hidden
+attr roof__colour = ""
+
+@Group("Estimated Attributes (can be set by styles)", 3)
+
+// Note: These attributes can be overriden by styles.
+// estimated attributes based on default values or overriden by styles
+@Hidden
+attr estimatedLevels = defaultLevels
+@Hidden
+attr estimatedRoofForm = defaultRoofForm						// when no obj attr roof__height
+@Hidden
+attr estimatedNonFlatRoofForm = defaultNonFlatRoofForm			// when obj attr roof__height>0
+@Hidden
+attr estimatedFloorHeight = defaultFloorHeight
+@Hidden
+attr estimatedNonFlatRoofHeight = defaultNonFlatRoofHeight
+@Hidden
+attr estimatedBuildingForm = defaultBuildingForm
+@Hidden
+attr estimatedBuildingColor = defaultBuildingColor
+@Hidden
+attr estimatedRoofColor = defaultRoofColor
+@Hidden
+attr estimatedRepresentation = defaultRepresentation
+
+
+// ------------------------------
+// Other Variables and Functions
+// ------------------------------
+
+min(a, b) = case b<a: b else: a
+max(a, b) = case b>a: b else: a
+
+// default values
+const defaultLevels = 2
+const defaultRoofForm = "flat"
+const defaultNonFlatRoofForm = "gable"
+const defaultFloorHeight = 3.7
+const defaultNonFlatRoofHeight = 3
+const defaultBuildingForm = "extrusion"
+const defaultBuildingColor = "#ffffff"
+const defaultRoofColor = "#ffffff"
+const defaultRepresentation = "solid color"
+
+// estimated roof height - depends on Roof_Form
+// Note: This quantity is not available for styles to override
+const _estimatedRoofHeight =
+	case Roof_Form == "flat":
+		0
+	case height > 0:
+		min(height, estimatedNonFlatRoofHeight)
+	else:
+		estimatedNonFlatRoofHeight
+		
+// functions to test for object attribute data
+hasBuildingLevels = building__levels != -1
+hasRoofHeight = roof__height != -1
+hasHeight = height != -1
+hasRoofShape = roof__shape != ""
+hasBuildingColor = building__colour != ""
+hasRoofColor = roof__colour != ""
+
+// functions to set values based on object attribute data or estimated values
+
+_getLevels = 
+	case hasBuildingLevels:
+		building__levels
+	case hasHeight:
+		case hasRoofHeight:
+			max(rint((height - roof__height)/estimatedFloorHeight), 1)
+		else:
+			max(rint((height - _estimatedRoofHeight)/estimatedFloorHeight), 1)
+	else:
+		estimatedLevels
+
+_getEaveHeight =
+	case hasHeight:
+		case hasRoofHeight:
+			height - roof__height
+		else:
+			height - _estimatedRoofHeight
+	else:
+		Levels*estimatedFloorHeight
+
+_getRidgeHeight =
+	case hasHeight:
+		height
+	case hasRoofHeight:
+		Eave_Ht + roof__height
+	else:
+		Eave_Ht + _estimatedRoofHeight
+
+_getFloorHeight =
+	case hasHeight:
+		case Levels == 0:	
+			Eave_Ht
+		else:
+			Eave_Ht/Levels
+	else:
+		estimatedFloorHeight
+
+_getBuildingForm = estimatedBuildingForm
+
+_getRoofForm =
+	case hasRoofShape:
+		case roof__shape == "flat":			"flat"
+		case roof__shape == "skillion":		"shed"
+		case roof__shape == "gabled":		"gable"
+		case roof__shape == "half-hipped":	"half-hip"
+		case roof__shape == "hipped":		"hip"
+		case roof__shape == "pyramidal":	"pyramid"
+		case roof__shape == "gambrel":		"gambrel"
+		case roof__shape == "mansard":		"mansard"
+		case roof__shape == "dome":			"dome"
+		case roof__shape == "onion":		"onion"
+		case roof__shape == "round":		"round"
+		case roof__shape == "saltbox":		"saltbox"
+		else:								"flat"
+	case roof__height > 0:
+		estimatedNonFlatRoofForm
+	case roof__height == 0:
+		"flat"
+	else:
+		estimatedRoofForm
+
+_getBuildingColor =
+	case hasBuildingColor:
+		case len(building__colour) == 7 && substring(building__colour, 0, 1) == "#":
+			building__colour
+		case len(building__colour) == 4 && substring(building__colour, 0, 1) == "#":
+			substring(building__colour, 0, 2) + substring(building__colour, 1, 2) + substring(building__colour, 2, 3) + substring(building__colour, 2, 3) + substring(building__colour, 3, 4) + substring(building__colour, 3, 4)
+		case Color_Names.getColorFromName(building__colour) == "#ffffff":
+			estimatedBuildingColor
+		else:
+			Color_Names.getColorFromName(building__colour)
+	else:
+		estimatedBuildingColor
+		
+_getRoofColor =
+	case hasRoofColor:
+		case len(roof__colour) == 7 && substring(roof__colour, 0, 1) == "#":
+			roof__colour
+		case len(roof__colour) == 4 && substring(roof__colour, 0, 1) == "#":
+			substring(roof__colour, 0, 2) + substring(roof__colour, 1, 2) + substring(roof__colour, 2, 3) + substring(roof__colour, 2, 3) + substring(roof__colour, 3, 4) + substring(roof__colour, 3, 4)
+		case Color_Names.getColorFromName(roof__colour) == "#ffffff":
+			estimatedRoofColor
+		else:
+			Color_Names.getColorFromName(roof__colour)
+	else:
+		estimatedRoofColor
+
+
+// ------------------------------
+// Start Rule
+// ------------------------------
+
+@StartRule
+Generate -->
+	case Representation == "realistic with facade textures":
+		Building_From_Footprint.Generate
+	else:
+		set(Building_From_Footprint.OverwriteColor, BuildingColor)
+		Building_From_Footprint.Generate
+			
+	
+// ------------------------------
+// Styles
+// ------------------------------
+
+
+style GenericMediumTown
+
+attr estimatedLevels =
+	case geometry.area < 100 : rint(rand(1,2))
+	case geometry.area < 300 : rint(rand(2,3))
+	case geometry.area < 500 : rint(rand(3,4))
+	case geometry.area < 1000: rint(rand(3,5))
+	case geometry.area < 2000: rint(rand(6,7))
+	case geometry.area < 7000: rint(rand(3,5))
+	else                     : rint(rand(3,5))
+attr Representation = "realistic with facade textures"
+
+// ------------------------------
+
+style GenericSmallTown
+
+attr estimatedLevels =
+	case geometry.area < 100 : rint(rand(1,2))
+	case geometry.area < 300 : rint(rand(2,3))
+	case geometry.area < 500 : rint(rand(2,4))
+	case geometry.area < 1000: rint(rand(2,4))
+	case geometry.area < 2000: rint(rand(2,4))
+	case geometry.area < 7000: rint(rand(2,4))
+	else                     : rint(rand(2,4))
+attr Representation = "realistic with facade textures"
+
+
+// ------------------------------
+
+style GenericSmallVillage
+
+attr estimatedLevels =
+	case geometry.area < 100 : rint(rand(1,2))
+	case geometry.area < 300 : rint(rand(2,3))
+	case geometry.area < 500 : rint(rand(2,4))
+	case geometry.area < 1000: rint(rand(2,4))
+	case geometry.area < 2000: rint(rand(2,4))
+	case geometry.area < 7000: rint(rand(2,4))
+	else                     : rint(rand(2,4))
+attr estimatedNonFlatRoofForm = "gable"
+attr estimatedRoofForm = "gable"
+attr estimatedFloorHeight = rand(3,4)
+attr estimatedNonFlatRoofHeight = rand(3,4)
+attr estimatedBuildingForm = "extrusion"
+attr estimatedBuildingColor =
+	90%:	"#473531"
+	else:	"#cfc8b8"
+attr estimatedRoofColor = "#85898a"
+attr Representation = "solid color"
+
+// ------------------------------
+
+style NewYork
+
+attr estimatedLevels =
+	case geometry.area < 100 : rint(rand(2,3))
+	case geometry.area < 300 : rint(rand(3,6))
+	case geometry.area < 500 : rint(rand(4,8))
+	case geometry.area < 1000: rint(rand(6,10))
+	case geometry.area < 2000: rint(rand(10,40))
+	case geometry.area < 7000: 5%: rint(rand(70,100)) 20%: rint(rand(50,70)) else: rint(rand(40,60))
+	else                     : rint(rand(7,20))
+attr estimatedNonFlatRoofForm = "shed"
+attr estimatedRoofForm = 10%: "pyramid" 10%: "shed" else: "flat"
+attr estimatedFloorHeight = rand(3.5,4.5)
+attr estimatedNonFlatRoofHeight = estimatedFloorHeight
+attr estimatedBuildingForm =
+	case Eave_Ht < 50 : "extrusion"
+	case Eave_Ht > 200: "setback everywhere"
+	else              : 5%:"extrusion" 15%:"setback top" 15%:"setback facade" 15%:"setback base" else:"setback everywhere"
+attr estimatedBuildingColor =
+	25%:	"#888888"
+	25%:	"#aaaaaa"
+	25%:	"#cccccc"
+	else:	"#eeeeee"
+attr estimatedRoofColor = estimatedBuildingColor
+attr Representation = "realistic with facade textures"
+
+// ------------------------------
+
+style Vancouver
+
+attr estimatedLevels =
+	case geometry.area < 100 : 1
+	case geometry.area < 300 : 10%: 2 else: 1
+	case geometry.area < 500 : 5%: rint(rand(4,6)) 20%: 3 70%: 2 else: 1
+	case geometry.area < 1000: 5%: rint(rand(10,20)) 10%: rint(rand(5,10)) else: rint(rand(2,5))
+	case geometry.area < 2000: 5%: rint(rand(20,30)) 10%: rint(rand(10,20)) else: rint(rand(5,10))
+	case geometry.area < 7000: 5%: rint(rand(30,45)) 10%: rint(rand(20,30)) else: rint(rand(10,20))
+	else                     : 15
+attr estimatedNonFlatRoofForm = 50%: "gable" else: "hip"
+attr estimatedRoofForm =
+	case geometry.area<500
+		 && ( (height>4 && height<16)
+		    || (height == -1 && estimatedLevels>1 && estimatedLevels<4) ):
+		estimatedNonFlatRoofForm
+	else:
+		"flat"
+attr estimatedFloorHeight = rand(3.5,4.5)
+attr estimatedNonFlatRoofHeight = estimatedFloorHeight
+attr estimatedBuildingForm =
+	case Eave_Ht < 50 : "extrusion"
+	case Eave_Ht > 100: "setback everywhere"
+	else              : 5%:"extrusion" 15%:"setback top" 15%:"setback facade" 15%:"setback base" else:"setback everywhere"
+attr estimatedBuildingColor =
+	case geometry.area<500
+		 && ( (height>4 && height<16)
+		    || (height == -1 && estimatedLevels>1 && estimatedLevels<4) ):
+		25%:	"#605f62"
+		25%:	"#c5b9b0"
+		10%:	"#9b5d5d"
+		10%:	"#638fa5"
+		else:	"#dcdade"
+	else:
+		25%:	"#b3babd"
+		25%:	"#cee1e6"
+		else:	"#e5e5e4"
+attr estimatedRoofColor =
+	case geometry.area<500
+		 && ( (height>4 && height<16)
+		    || (height == -1 && estimatedLevels>1 && estimatedLevels<4) ):
+		"#535a6c"
+	else:
+		estimatedBuildingColor		
+attr Representation = "realistic with facade textures"
+
+// ------------------------------
+
+style Zurich
+
+attr estimatedLevels =
+	case geometry.area < 100 : 2
+	case geometry.area < 300 : rint(rand(3,4))
+	case geometry.area < 500 : rint(rand(4,5))
+	case geometry.area < 1000: rint(rand(5,6))
+	case geometry.area < 2000: 5%: rint(rand(7,12)) else: rint(rand(5,7))
+	case geometry.area < 7000: 7
+	else                     : 7
+attr estimatedNonFlatRoofForm = 50%: "gable" 40%: "hip" else: "gambrel"
+attr estimatedRoofForm =
+	case geometry.area<500
+		 && ( (height>4 && height<24)
+		    || (height == -1 && estimatedLevels>1 && estimatedLevels<7) ):
+		estimatedNonFlatRoofForm
+	else:
+		"flat"
+attr estimatedFloorHeight = rand(3.5,4)
+attr estimatedNonFlatRoofHeight = rand(2,4)
+attr estimatedBuildingForm =
+	case Eave_Ht < 20: "extrusion"
+	case Eave_Ht > 40: "setback everywhere"
+	else             : 5%:"extrusion" 15%:"setback top" 15%:"setback facade" 15%:"setback base" else:"setback everywhere"
+attr estimatedBuildingColor =
+	case geometry.area<500
+		 && ( (height>4 && height<24)
+		    || (height == -1 && estimatedLevels>1 && estimatedLevels<7) ):
+		14%:	"#fed9a4"
+		14%:	"#f3ce97"
+		14%:	"#febea2"
+		14%:	"#94a5b9"
+		14%:	"#aabcbc"
+		14%:	"#baac89"
+		else:	"#ff5dd"
+	else:
+		25%:	"#818792"
+		25%:	"#d9d8da"
+		25%:	"#c5bfc1"
+		else:	"#f4f4ec"
+attr estimatedRoofColor =
+	case geometry.area<500
+		 && ( (height>4 && height<24)
+		    || (height == -1 && estimatedLevels>1 && estimatedLevels<7) ):
+		25%:	"#72413a"
+		25%: 	"#a76d57"
+		25%:	"#a95f12e"
+		else: 	"#9d5d39"
+	else:
+		estimatedBuildingColor		
+attr Representation = "realistic with facade textures"
+
+// ------------------------------
+
+style Wellington
+
+attr estimatedLevels =
+	case geometry.area < 100 : 1
+	case geometry.area < 300 : 50%: 2 else: 3
+	case geometry.area < 500 : rint(rand(3,4))
+	case geometry.area < 1000: rint(rand(4,6))
+	case geometry.area < 2000: 5%: rint(rand(20,30)) else: rint(rand(6,10))
+	case geometry.area < 7000: rint(rand(10,20))
+	else                     : 8
+attr estimatedNonFlatRoofForm = "gable"
+attr estimatedRoofForm =
+	case geometry.area<500
+		 && ( (height>4 && height<16)
+		    || (height == -1 && estimatedLevels>1 && estimatedLevels<4) ):
+		estimatedNonFlatRoofForm
+	else:
+		"flat"
+attr estimatedFloorHeight = rand(3,4)
+attr estimatedNonFlatRoofHeight = estimatedFloorHeight
+attr estimatedBuildingForm =
+	case Eave_Ht < 30 : "extrusion"
+	case Eave_Ht > 80 : "setback everywhere"
+	else              : 5%:"extrusion" 15%:"setback top" 15%:"setback facade" 15%:"setback base" else:"setback everywhere"
+attr estimatedBuildingColor =
+	25%:	"#888888"
+	25%:	"#aaaaaa"
+	25%:	"#cccccc"
+	else:	"#eeeeee"
+attr estimatedRoofColor = estimatedBuildingColor
+attr Representation = "realistic with facade textures"
+
+// ------------------------------
+
+style Monaco
+
+attr estimatedLevels =
+	case geometry.area < 100 : rint(rand(2,3))
+	case geometry.area < 300 : rint(rand(3,4))
+	case geometry.area < 500 : rint(rand(4,8))
+	case geometry.area < 1000: rint(rand(8,12))
+	case geometry.area < 2000: rint(rand(10,15))
+	case geometry.area < 7000: 5%: rint(rand(30,40)) 20%: rint(rand(20,30)) else: rint(rand(10,25))
+	else                     : rint(rand(7,10))
+attr estimatedNonFlatRoofForm = "gable"
+attr estimatedRoofForm =
+	case geometry.area<500
+		 && ( (height>4 && height<24)
+		    || (height == -1 && estimatedLevels>1 && estimatedLevels<7) ):
+		estimatedNonFlatRoofForm
+	else:
+		"flat"
+attr estimatedFloorHeight = rand(3.5,4)
+attr estimatedNonFlatRoofHeight = rand(2,3)
+attr estimatedBuildingForm =
+	case Eave_Ht < 30 : "extrusion"
+	case Eave_Ht > 80 : "setback everywhere"
+	else              : 5%:"extrusion" 15%:"setback top" 15%:"setback facade" 15%:"setback base" else:"setback everywhere"
+attr estimatedBuildingColor =
+	case geometry.area<500
+		 && ( (height>4 && height<24)
+		    || (height == -1 && estimatedLevels>1 && estimatedLevels<7) ):
+		"#e2d2c2"//"#f0dcb3"
+	else:
+		20%:	"#c9bba7"
+		20%:	"#f5ebdd"
+		25%:	"#d2d0c9"
+		else:	"#ecedef"
+attr estimatedRoofColor =
+	case geometry.area<500
+		 && ( (height>4 && height<24)
+		    || (height == -1 && estimatedLevels>1 && estimatedLevels<7) ):
+		"#d27b50"
+	else:
+		estimatedBuildingColor		
+attr Representation = "realistic with facade textures"
+		
+// ------------------------------
+
+style Riomaggiore
+
+attr estimatedLevels =
+	case geometry.area < 100 : rint(rand(2,3))
+	case geometry.area < 300 : rint(rand(3,5))
+	case geometry.area < 500 : rint(rand(3,5))
+	case geometry.area < 1000: rint(rand(3,5))
+	case geometry.area < 2000: rint(rand(3,5))
+	case geometry.area < 7000: rint(rand(3,5))
+	else                     : rint(rand(3,5))
+attr estimatedNonFlatRoofForm = 50%: "gable" else: "shed"
+attr estimatedRoofForm =
+	90%:	"gable"
+	else:	"flat"
+attr estimatedFloorHeight = rand(3,4)
+attr estimatedNonFlatRoofHeight = rand(2,3)
+attr estimatedBuildingForm = "extrusion"
+attr estimatedBuildingColor =
+	5%:		"#b56661"
+	5%:		"#d0896e"
+	5%:		"#8c8e8b"
+	5%:		"#f7ba67"
+	5%:		"#e69f93"
+	5%:		"#ecc56d"
+	5%:		"#d35705"
+	5%:		"#878ca9"
+	5%:		"#d44826"
+	5%:		"#e5e3e7"
+	5%:		"#eed1ba"
+	5%:		"#ece7d2"
+	5%:		"#e79c01"
+	5%:		"#9d5f10"
+	5%:		"#c6d6cc"
+	5%:		"#a2bf91"
+	5%:		"#f9d565"
+	5%:		"#e6bebc"
+	5%:		"#d35b4a"
+	else:	"#b7ddfa"
+attr estimatedRoofColor =
+	25%:	"#8b898b"
+	25%: 	"#c0a38c"
+	25%:	"#c5a179"
+	else:	"#bbb3ac"
+attr Representation = "solid color"
+

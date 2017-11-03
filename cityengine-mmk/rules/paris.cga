@@ -32,9 +32,9 @@ import Parisian_Roof: "ParisianRoofs.cga"
 
 # imports from Esri Library
 @Hidden
-import Plant: "/ESRI.lib/rules/Plants/Plant_Loader.cga" 
+import Plant: "rules/Plants/Plant_Loader.cga" 
 @Hidden
-import Streets: "/ESRI.lib/rules/Streets/Street_Modern_Simple.cga"
+import Streets: "rules/Streets/Street_Modern_Simple.cga"
 @Hidden
 import MMK: "MMK.cga"
 

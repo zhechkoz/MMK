@@ -132,9 +132,9 @@ class CEGraphItem(MMKGraphItem):
     def transform(self, dx, dy, dz):
         # Apply transformation for every point to match Unity CS
         for vertex in self.vertices:    
-            vertex.x = -(vertex.x - dx if vertex.x > 0 else vertex.x + dx)
+            vertex.x = -(vertex.x + dx)
             vertex.y = -vertex.y
-            vertex.z = vertex.z - dz if vertex.z > 0 else vertex.z + dz
+            vertex.z = vertex.z + dz
     
     def reprJSON(self):
         dict = {'osm' : self.osmID}

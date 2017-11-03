@@ -24,7 +24,8 @@ roads = {'motorway' : Road(maxspeed = 130, lanes = 6),
          'residential' : Road(maxspeed = 50, lanes = 2),
          'living_street' : Road(maxspeed = 25, lanes = 2),
          'unsurfaced' : Road(maxspeed = 20, lanes = 2),
-         'service' : Road(maxspeed = 20, lanes = 2)
+         # Uncomment if there are important service roads
+         #'service' : Road(maxspeed = 20, lanes = 2) 
 }
 
 def sanitize(xml):

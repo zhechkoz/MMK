@@ -280,7 +280,7 @@ if __name__ == '__main__':
 
     # Define export center coordinates; These has to be the same
     # as in the "Export Models..." dialog in CityEngine.
-    ox = 690985
+    ox = -690985
     oz = 5336220
     
     # If the program cannot find the SUMO objetcts' offsets
