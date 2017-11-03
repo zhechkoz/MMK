@@ -99,15 +99,15 @@ class CEGraph(object):
             else:
                 for segment in segments:
                         for edge in edges:
-                            validLanes.update(node.lanes)
-                            segment.appendLanes(node.lanes.keys(), forward=forward)
+                            validLanes.update(edge.lanes)
+                            segment.appendLanes(edge.lanes.keys(), forward=forward)
         return validLanes
-    
+
     def translateCoordinates(self, dx, dy, dz):
         for subList in [self.nodes.values(), self.segments.values(), self.buildings.values(), self.parkings.values()]:
             for item in subList:
                 item.transform(dx, dy, dz)
-        
+
     def reprJSON(self):
         dict = {'author' : self.author,
                 'date' : str(self.date),

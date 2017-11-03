@@ -22,7 +22,7 @@ class SUMOGraph(object):
     
     def reprJSON(self):
         dict = { 'connections' : self.connections,
-                 'lanes' : self.lanes
+                 'lanes' : self.lanes.values()
         }
         return dict
 

@@ -45,8 +45,8 @@ class MMKExporter(object):
         self.ceGraph.appendSegments(segments)
         
         # Parse buildings and parkings
-        buildings = self.parseCEObjectsFromKind(lambda s: ce.getAttribute(s, 'building') == 'yes')
-        parkings = self.parseCEObjectsFromKind(lambda s: ce.getAttribute(s, 'amenity') == 'parking')
+        buildings = self.parseCEObjectsOfKind(lambda s: ce.getAttribute(s, 'building') == 'yes')
+        parkings = self.parseCEObjectsOfKind(lambda s: ce.getAttribute(s, 'amenity') == 'parking')
         self.ceGraph.buildings = buildings
         self.ceGraph.parkings = parkings 
         
@@ -80,14 +80,15 @@ class MMKExporter(object):
         for o in segments:
             neighbours = ce.getObjectsFrom(o, ce.isGraphNode)
             neighboursList = [ce.getOID(neighbour) for neighbour in neighbours]
+            osmID = ce.getAttribute(o, 'osm_id')
 
-            segment = CEGraphSegment(ce.getOID(o), ce.getVertices(o), ce.getAttribute(o, 'osm_id'), neighboursList)
+            segment = CEGraphSegment(ce.getOID(o), ce.getVertices(o), osmID, neighboursList)
             segment.initializeAttributes(ce, o)
             parsedSegments.append(segment)
 
             shapes = ce.getObjectsFrom(o, ce.isShape)
             for s in shapes:
-                segment.appendShapes(ce.getOID(s), ce.getVertices(s))
+                segment.appendShapes(ce.getOID(s), ce.getVertices(s), osmID)
         return parsedSegments
                 
     def parseCEGraphNodes(self):
@@ -96,17 +97,18 @@ class MMKExporter(object):
         for o in nodes:
             neighbours = ce.getObjectsFrom(o, ce.isGraphSegment)
             neighboursList = [ce.getOID(neighbour) for neighbour in neighbours]
+            osmID = ce.getAttribute(o, 'osm_id')
 
-            node = CEGraphNode(ce.getOID(o), ce.getVertices(o), ce.getAttribute(o, 'osm_id'), neighboursList)
+            node = CEGraphNode(ce.getOID(o), ce.getVertices(o), osmID, neighboursList)
             node.initializeAttributes(ce, o)
             parsedNodes.append(node)
 
             shapes = ce.getObjectsFrom(o, ce.isShape)
             for s in shapes:
-                node.appendShapes(ce.getOID(s), ce.getVertices(s))
+                node.appendShapes(ce.getOID(s), ce.getVertices(s), osmID)
         return parsedNodes
     
-    def parseCEObjectsFromKind(self, isObject):
+    def parseCEObjectsOfKind(self, isObject):
         parsedItems = {}
         shapeLayers = ce.getObjectsFrom(ce.scene, ce.isShapeLayer)
         for l in shapeLayers:

@@ -163,9 +163,14 @@ class CEGraphSegment(CEGraphItem):
         self.hierarchy = highway
         self.maxspeed = maxspeed
         self.oneway = oneway
-        
-    def appendShapes(self, shapeID, vertices):
-        shape = MMKGraphItem(shapeID, vertices)
+
+    def transform(self, dx, dy, dz):  
+        super(CEGraphSegment, self).transform(dx, dy, dz)
+        for shape in self.shapes:
+            shape.transform(dx, dy, dz)
+
+    def appendShapes(self, shapeID, vertices, osmID):
+        shape = CEGraphItem(shapeID, vertices, osmID)
         self.shapes.append(shape)
 
     def appendLanes(self, lanes, forward=True):
@@ -202,8 +207,13 @@ class CEGraphNode(CEGraphItem):
         self.shapes = []
         self.lanes = []
 
-    def appendShapes(self, shapeID, vertices):
-        shape = MMKGraphItem(shapeID, vertices)
+    def transform(self, dx, dy, dz):  
+        super(CEGraphNode, self).transform(dx, dy, dz)
+        for shape in self.shapes:
+            shape.transform(dx, dy, dz)
+
+    def appendShapes(self, shapeID, vertices, osmID):
+        shape = CEGraphItem(shapeID, vertices, osmID)
         self.shapes.append(shape)
 
     def appendLanes(self, lanes):
