@@ -266,11 +266,12 @@ class MMKExporter(object):
 
         dir = ce.toFSPath('/' + ce.project())
         mkdir_p(os.path.join(dir, 'export'))
-        dir = ce.toFSPath('export/' +  exportName)
+        dir = ce.toFSPath('export')
+        fileName = os.path.join(dir, exportName)
 
-        with open(dir, 'w+') as file:  
+        with open(fileName, 'w+') as file:  
             file.write(json.dumps(self, indent=4, sort_keys=True, cls=ComplexEncoder))
-        print('File exported! Location: ' + dir + '\n')
+        print('File exported! Location: ' + fileName + '\n')
       
 if __name__ == '__main__':
 
