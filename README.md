@@ -22,7 +22,7 @@
 	* **Select/deselect all** - all objects from the input are imported.
 	* **Map OSM tags** - include the osm ID which is used to correlate between SUMO and CityEngine data in the export process.
 	* **Run Graph Cleanup Tool after Import** - this is the only setting which does not alter important characteristics of the network elements such as osm ID and their position. If nodes or segments are deleted in CityEngine import process or after that by the user, this will introduce inconsistencies with the map data imported in SUMO. If for some reason you want to change something in the map you have to either change the *map-sanitized.osm* or check the export output for warnings and decide how to solve them.
-	* **Create street/Intersection Shapes from Graph**
+	* **Create Street/Intersection Shapes from Graph**
 
 6. In the generated city model select the appropriate rules for every object in the scene and generate the textures using the *Generate* button.
 
@@ -31,8 +31,8 @@
 8. To export the semantical description of the road network use the *mmkexporter.py* script (*cityengine-mmk/scripts*). On lines 279 and 280 specify the path to *map-sanitized.osm* and *map-sanitized.net.xml* (relative to CityEngine project's folder) and on lines 284 and 285 define the **x** and **z** offset which you noted from the *FBX* export in the previous step. **Important:** The script will try to determine automatically the offset between SUMO and CityEngine data but if this does not succeed a warning message will be displayed in the console and the user has to manually enter *sumoox* and *sumooz* values on lines 292 and 293 and pass them to the *Exporter* object. Start the script either by selecting *Python > Run* or *F9*. The generated file can be found in *cityengine-mmk/export* and is called by default *MMK_GraphExport.json*.
 
 9. Import files in Unity3D by following the steps in this order:
-	* Create folder *Assets/Models/<name of scene>*.
-	* Create folder *Assets/Models/<name of scene>/Textures* and copy all pictures from models folder in CityEngine to this folder.
-	* Copy *<name>.fbx* file to this folder (the materials folder will be copied automatically).
+	* Create folder *Assets/Models/\<name of scene\>*.
+	* Create folder *Assets/Models/\<name of scene\>/Textures* and copy all pictures from models folder in CityEngine to this folder.
+	* Copy *<name>.fbx* file to *Assets/Models/\<name of scene\>* (the materials folder will be copied automatically).
 
-10. Drag and drop the model to the Unity3D scene and add a *BoxCollider* to the ground of the scene. Attach to the model the *Network.cs* script and *CarRoadDescriptor.cs* script to **MMKCar**. In *Network.cs* specify the path to *MMK_GraphExport.json* and in *CarRoadDescriptor.cs* check the name of the city model.
+10. Drag and drop the model to the Unity3D scene and add a *BoxCollider* to the ground of the scene. Next, change the scaling of the street model to (100, 100, 100). Attach to the model the *Network.cs* script and *CarRoadDescriptor.cs* script to **MMKCar**. In *Network.cs* specify the path to *MMK_GraphExport.json* and in *CarRoadDescriptor.cs* check the name of the city model.
