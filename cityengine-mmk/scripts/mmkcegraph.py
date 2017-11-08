@@ -70,9 +70,6 @@ class CEGraph(object):
                 ceNode.hierarchy = node.hierarchy
 
         for (id, edges) in SUMOedges.iteritems():
-            forward = True
-            osmID = 0
-
             if len(id) > 1 and id[0:2] == '--':
                 # Edge's OSM ID is negative and direction is negative, so
                 # this is a backwards segment
@@ -97,11 +94,11 @@ class CEGraph(object):
             if len(segments) == 0:
                 print('WARNING: Segment with OSM ID ' + str(id) + ' found in SUMO is missing!')
                 continue
-            else:
-                for segment in segments:
-                        for edge in edges:
-                            validLanes.update(edge.lanes)
-                            segment.appendLanes(edge.lanes.keys(), forward=forward)
+
+            for segment in segments:
+                    for edge in edges:
+                        validLanes.update(edge.lanes)
+                        segment.appendLanes(edge.lanes.keys(), forward=forward)
         return validLanes
 
     def translateCoordinates(self, dx, dy, dz):

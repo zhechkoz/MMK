@@ -26,7 +26,6 @@ cleanupSettings.setSnapNodesToSegments(False)
 cleanupSettings.setResolveConflictShapes(True)
 
 class MMKExporter(object):
-
     def __init__(self, author, osmFile, sumoFile, ox, oz, sumoox=None, sumooz=None):
         self.osmFile = osmFile
         self.sumoFile = sumoFile
@@ -215,11 +214,13 @@ class MMKExporter(object):
         for o in objects:
             attrStart = ce.getAttribute(o, 'connectionStart') or ''
             attrEnd = ce.getAttribute(o, 'connectionEnd') or ''
+            hasStart = any(shape in attrStart for shape in shapeWhiteList)
+            hasEnd = any(shape in attrEnd for shape in shapeWhiteList)
 
-            if any(shape in attrStart for shape in shapeWhiteList) != any(shape in attrEnd for shape in shapeWhiteList):
-                intersections.append(o)
+            if hasStart != hasEnd:
+                intersections.append((o, hasStart))
 
-        for intersection in intersections:
+        for (intersection, hasStart) in intersections:
             lanes = int(ce.getAttribute(intersection, 'lanes'))
             if lanes == 1:
                 continue
@@ -239,12 +240,59 @@ class MMKExporter(object):
                 lanesForward = int(lanesForward)
 
             offset = 2 * (lanesForward - lanesBackward)
-            offset = -offset if lanesForward > lanesBackward else offset
+            adjacentNodes = ce.getObjectsFrom(intersection, ce.isGraphNode)
+            mergeNode = adjacentNodes[0] # Find the node of the segment which is not in the junction 
+            if hasStart: # According to the orientation of the segment determine the offset's sign
+                lanesForward, lanesBackward = lanesBackward, lanesForward
+                mergeNode = adjacentNodes[1]
 
-            oldOffset = int(ce.getAttribute(intersection, 'streetOffset') or 0)
-            newOffset = oldOffset + offset
-            ce.setAttributeSource(intersection, '/ce/street/streetOffset', 'OBJECT')
-            ce.setAttribute(intersection, 'streetOffset', newOffset)
+            offset = -offset if lanesForward > lanesBackward else offset
+            self.setOffset(intersection, offset)
+            
+            # For every next segment belonging to the junction apply the same offset
+            self.propagateOffset(intersection, mergeNode, offset)
+                
+    def propagateOffset(self, currentSegment, mergeNode, offset):
+        while True:
+            adjacentSegments = ce.getObjectsFrom(mergeNode, ce.isGraphSegment)
+            if len(adjacentSegments) != 2: # Streets always end with a roundabout (one adjacent segment)
+                return
+
+            nextSegment = adjacentSegments[0]
+            if ce.getOID(nextSegment) == ce.getOID(currentSegment):
+                nextSegment = adjacentSegments[1]
+
+            if not self.equalSegments(currentSegment, nextSegment):
+                return
+
+            currentSegment = nextSegment
+            self.setOffset(currentSegment, offset)
+            
+            adjacentNodes = ce.getObjectsFrom(currentSegment, ce.isGraphNode)
+            nextNode = adjacentNodes[0]
+            if ce.getOID(nextNode) == ce.getOID(mergeNode):
+                nextNode = adjacentNodes[1]
+
+            mergeNode = nextNode
+
+    def equalSegments(self, first, second):
+        firstLanes = ce.getAttribute(first, 'lanes')
+        secondLanes = ce.getAttribute(second, 'lanes')
+        firstForwardLanes = ce.getAttribute(first, 'lanes:forward')
+        secondForwardLanes = ce.getAttribute(second, 'lanes:forward')
+        firstBackwardLanes = ce.getAttribute(first, 'lanes:backward')
+        secondBackwardLanes = ce.getAttribute(second, 'lanes:backward')
+        firstHighway = ce.getAttribute(first, 'highway')
+        secondHighway = ce.getAttribute(second, 'highway')
+
+        return (firstLanes == secondLanes and firstForwardLanes == secondForwardLanes and
+                firstBackwardLanes == secondBackwardLanes and firstHighway == secondHighway)
+    
+    def setOffset(self, item, offset):
+        oldOffset = int(ce.getAttribute(item, 'streetOffset') or 0)
+        newOffset = oldOffset + offset
+        ce.setAttributeSource(item, '/ce/street/streetOffset', 'OBJECT')
+        ce.setAttribute(item, 'streetOffset', newOffset)
 
     def exportJson(self, exportName):
         class ComplexEncoder(json.JSONEncoder):
