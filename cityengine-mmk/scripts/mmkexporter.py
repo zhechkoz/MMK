@@ -191,8 +191,21 @@ class MMKExporter(object):
                          'Please, define it manually by passing sumoox and sumooz offsets to MMKExporter!')
     
     def reprJSON(self):
+        # IMPORTANT: SUMO's both coordinates has to be firstly rotatet 
+        # by 180 degrees and than translated. The same is valid also 
+        # for the x and y coordinates of all CE objects.
+        offsets = {'offsets' : {'sumo' : {'x' : self.sumoox, 
+                                          'z' : self.sumooz
+                               },
+                                'ce' : {'x' : self.ox, 
+                                        'z' : self.oz
+                               }
+                  }
+        }
+
         dict = self.ceGraph.reprJSON()
-        dict.update(self.sumoGraph.reprJSON())      
+        dict.update(self.sumoGraph.reprJSON())
+        dict.update(offsets)
         return dict
 
     @noUIupdate
