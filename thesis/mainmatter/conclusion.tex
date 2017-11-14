@@ -2,12 +2,14 @@
 \label{ch:conclusion}
 
 \section{Conclusion}
+In this Interdisciplinary Project we have extended the functionality of the MMK Driving Simulator developed at the Institute for Human-Machine Communication, TUM.
 
+Firstly, we developed a JSON format which holds semantic description of a road network. We used this format to describe a 3D urban environment generated in CityEngine adopting OSM data from a chosen areal. In order to achieve this, we employed the Python interface provided by CityEngine and implemented a Python script which exports the properties of the scene. However, this approach was not enough for a complete description of the considered road network. Therefore, we also imported the same OSM data in SUMO and used it to extend the semantic description with data about valid lanes which facilitate the movement of vehicle in the scene. Furthermore, we implemented a interface which imports this description format in Unity and can be utilised for different purposes, \emph{e.g.} navigation. 
 
-
+Finally, we used the exported semantic description of a road network to  build a navigation functionality for vehicle in Unity. This can be used to calculate the shortest path from one point to another point on the map.
 
 \section{Outlook}
 
+While in this project we have developed way to semantically describe a road network and showed some of its applications, there are many opportunities for extending the scope of this project in the concept of the Driving Simulator remain. This section presents some of these directions and gives some suggestions how they can be achieved. 
 
-
-
+First of all, one could use the the buildings vertex information and place colliders in Unity's scene so the car could not drive through them. This could be done for each building or even better one collider could contain more than one building which are in close proximity. Furthermore, the same idea could be used to combine some of the nearly situated colliders which are generated for every road segment. Finally, the road information can be used to implement autonomous vehicles. 
