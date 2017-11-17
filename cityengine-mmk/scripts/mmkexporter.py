@@ -154,14 +154,14 @@ class MMKExporter(object):
                     vertices = junctionAttrib['x'] + ',' + junctionAttrib['y']
                     hierachy = junctionAttrib['type']
 
-                sumoItem = SUMONode(id, vertices or '', hierachy or 'unknown')
+                sumoItem = SUMOGraphNode(id, vertices or '', hierachy or 'unknown')
                 sumoNodes.setdefault(sumoItem.id, []).append(sumoItem)
             else:
                 if 'shape' in edgeAttrib:
                      vertices = edgeAttrib['shape']
 
                 (start, end) = (edgeAttrib.get('from', ''), edgeAttrib.get('to', ''))
-                sumoItem = SUMOEdge(id, vertices or '', order, start, end)
+                sumoItem = SUMOGraphEdge(id, vertices or '', order, start, end)
                 sumoEdges.setdefault(sumoItem.id, []).append(sumoItem)
 
             for lane in edge.findall('lane'):

@@ -68,43 +68,43 @@ class SUMOGraphItem(MMKGraphItem):
             vertex.z = -vertex.z + dz
 
 
-class SUMOEdge(SUMOGraphItem):
+class SUMOGraphEdge(SUMOGraphItem):
     def __init__(self, id, vertices, order, start, end):
-        super(SUMOEdge, self).__init__(id, vertices)
+        super(SUMOGraphEdge, self).__init__(id, vertices)
         self.order = order
         self.start = start
         self.end = end
         self.lanes = {}
     
     def transform(self, dx, dy, dz):  
-        super(SUMOEdge, self).transform(dx, dy, dz)
+        super(SUMOGraphEdge, self).transform(dx, dy, dz)
         for lane in self.lanes.values():
             lane.transform(dx, dy, dz)
 
     def appendLane(self, id, vertices, index, length):
-        lane = SUMOLane(id, vertices, index, length)
+        lane = SUMOGraphLane(id, vertices, index, length)
         self.lanes[lane.id] = lane
 
 
-class SUMONode(SUMOGraphItem):
+class SUMOGraphNode(SUMOGraphItem):
     def __init__(self, id, vertices, hierarchy):
-        super(SUMONode, self).__init__(id, vertices)
+        super(SUMOGraphNode, self).__init__(id, vertices)
         self.hierarchy = hierarchy
         self.lanes = {}
     
     def transform(self, dx, dy, dz):  
-        super(SUMONode, self).transform(dx, dy, dz)
+        super(SUMOGraphNode, self).transform(dx, dy, dz)
         for lane in self.lanes.values():
             lane.transform(dx, dy, dz)
 
     def appendLane(self, id, vertices, index, length):
-        lane = SUMOLane(id, vertices, index, length)
+        lane = SUMOGraphLane(id, vertices, index, length)
         self.lanes[lane.id] = lane
 
 
-class SUMOLane(SUMOGraphItem):
+class SUMOGraphLane(SUMOGraphItem):
     def __init__(self, id, vertices, index, length):
-        super(SUMOLane, self).__init__(id, vertices)
+        super(SUMOGraphLane, self).__init__(id, vertices)
         self.index = index
         self.length = length
 
@@ -112,7 +112,7 @@ class SUMOLane(SUMOGraphItem):
         dict = {'length' : self.length,
                 'index' : self.index
         }
-        dict.update(super(SUMOLane, self).reprJSON())
+        dict.update(super(SUMOGraphLane, self).reprJSON())
         return dict
 
 
