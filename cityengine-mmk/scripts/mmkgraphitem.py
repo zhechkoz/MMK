@@ -24,7 +24,7 @@ class MMKGraphItem(object):
         vertex = MMKGraphVertex(x, y, z)
         self.vertices.append(vertex)
     
-    # Has to be overriden by all children
+    # Has to be overriden by all subclasses
     def transform(self, dx, dy, dz):
         pass
 

@@ -71,7 +71,7 @@ class MMKExporter(object):
             # match lanes of deleted vertices to their neares neighbour, we
             # have to fix the coordinates of all SUMO items (especially lanes)
             # before collecting the lanes.
-            self.determineSUMOOffset()
+            self.determineSUMOOffset(sumoRoot)
             self.sumoGraph.translateCoordinates(self.sumoox, 0, self.sumooz)
 
             # Order lanes to corresponding segments and nodes
@@ -177,18 +177,18 @@ class MMKExporter(object):
 
         return sumoEdges, sumoNodes
         
-    def determineSUMOOffset(self):
+    def determineSUMOOffset(self, root):
         if self.sumoox and self.sumooz:
             return # Offset was set by user
+
+        location = root.find('location')
+        if location == None:
+            raise ValueError('Coordinates offset to Unity of SUMO objects could not be found!\n' +
+                             'Please, define it manually!')
         
-        for node in self.ceGraph.nodes.values():
-            correspondingNode = self.sumoGraph.nodes.get(str(node.osmID), None)
-            if correspondingNode:
-                self.sumoox = node.vertices[0].x + correspondingNode[0].vertices[0].x
-                self.sumooz = node.vertices[0].z + correspondingNode[0].vertices[0].z
-                return
-        raise ValueError('Coordinates offset to Unity of SUMO objects could not be found!\n' +
-                         'Please, define it manually by passing sumoox and sumooz offsets to MMKExporter!')
+        (sumoXOffset, sumoYOffset) = location.attrib['netOffset'].split(',')
+        self.sumoox = float(sumoXOffset) - self.ox
+        self.sumooz = float(sumoYOffset) - (-self.oz) # z coordinate is always negative to x
     
     def reprJSON(self):
         # IMPORTANT: SUMO's both coordinates has to be firstly rotatet 
@@ -345,9 +345,7 @@ if __name__ == '__main__':
     ox = -690985
     oz = 5336220
     
-    # If the program cannot find the SUMO objetcts' offsets
-    # automatically by calculating the translation between 
-    # corresponding nodes determineSUMOOffset(), then the
+    # If the program cannot find the SUMO objetcts' offsets, then the
     # following two values has to be defined by the user and
     # passed to the exporter object.
     sumoox = 0
