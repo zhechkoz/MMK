@@ -62,24 +62,48 @@ Another setting which could alter the shape generation process in a negative way
 Our first approach to create a semantic description of the road network in CE generated using OSM data involves completely ignoring the imported parameters in CE. We still have to export the vertices related to the CE's shapes using the CE's Python interface but all of the information about a given street segment such as number of lanes or speed limits will be directly taken from the OSM export file. The biggest advantage of this approach is that we can accomplish the \texttt{xml}-parsing in Python 3 which might be more performant than using the Jython interface in CE to read all of the attributes. Although this is generally true, we would break the export functionality in two big modules which are highly coherent and belong in one place. Moreover, there was another obstacle which seemed crucial for the success of this approach. CE does place almost (actually this causes yet another problem which will be discussed later in this section) every OSM node on its correct place and uses its original OSM ID, but this is not the case with segments. According to the shape of a given way (which is determined by its nodes), CE decides in how many actual segments to partition it. In other words, it may happen that one \texttt{way} object has more than one corresponding segments in the CE scene. Unfortunately, this introduces unnecessary difficulties in reconstructing a way from its segments which would be later crucial for the lane generation. Therefore, this first approach was abandoned in favour of a script purely implemented in the CE's Jython environment which depends on the imported attributes in CE from OSM to reconstruct each object's behaviour. 
 
 \subsection{CE Export}
-	- Explain the whole CE export without lanes including translation\\
-	- Implementation details - UML
+After importing the OSM data in CE as previously explained, the user have to assign rules to every object (\emph{e.g.} buildings, streets) and generate the 3D models. Some minor adjustments, such as moving buildings or placing crossing marks manually may be necessary in order to fully prepare the scene for export. Next, we can start the exporting process which is conducted by the \texttt{MMKExporter} class which can be seen in Figure \ref{fig:ce-overview-uml}. Firstly, we only consider the \texttt{MMKCEGraph}. 
+
+The \texttt{MMKExporter} traverses all \texttt{nodes}, \texttt{segments} and \texttt{shapes} and parses them together with their attributes in the corresponding \texttt{CEGraphItem} objects (Figure \ref{fig:ce-uml}). Utilising the CE's Python interface (\texttt{ce.getAttribute(item, 'NameOFAttribute')}), it is easy to access all of the essential attributes of each object which were imported from OSM. As you can see in the UML class diagram in Figure \ref{fig:ce-uml}, we have adopted a simple inheritance structure which allows extendability, \emph{i.e.} adding more CE objects to export. As already explained in Chapter \ref{ch:background}, the whole scene has to be exported in the end to some compatible format. Moreover, one have to specify the \texttt{x}, \texttt{y}, and \texttt{z} offsets which will translate all object's coordinates to the origin. We always leave the \texttt{y} to \texttt{0} since data is interpolated anyways by CE. However, \texttt{x} and \texttt{z} has to be provided as input parameters to \texttt{MMKExporter} as \texttt{ox} and \texttt{oz}. This is necessary, since the parsed object's coordinates has to be also translated in order to stay coherent with the corresponding 3D models. Finally, \texttt{exportJson} method can be invoked after the parsing project has finished and the semantical description is exported in the \texttt{export} folder of the CE project in JSON format.
 
 \begin{figure}[htb]
 	\centering
-	\includegraphics[width=0.7\textwidth]{figures/ce-overview-uml}
+	\includegraphics[width=0.65\textwidth]{figures/ce-overview-uml}
 	\label{fig:ce-overview-uml}
-	\caption{}
+	\caption{UML class diagram of \texttt{MMKExporter}, \texttt{MMKCEGraph}, and  \texttt{MMKSUMOGraph}}
 \end{figure}
 
 \subsection{Additional Information from SUMO}
-- Synchronisation between CE and SUMO - lanes, node search, offset search (location kurzweg)
+
+Now, that we have the basic properties of the road network we can try to extend it with additional data by benefiting from OSM ID information. For instance, we can add lane information to every street segment. Unfortunately, OSM data holds only the number of lanes for each street segment, therefore, CE does not create any lane shapes. We could try to generate lane shapes by interpolating the given data: number of lanes per segment and shape of the segment. However, we know that MMK Driving Simulator uses SUMO to simulate other traffic in the scene, which defines its own lane information. Therefore, we can try to synchronise CE and SUMO shapes coordinates and adopt SUMO lanes in our CE Export. This approach was associated with numerous problems which will be discussed in the following.
+
+Firstly, we parsed SUMO objects in corresponding \texttt{MMKGraphItem} objects from the \texttt{net.xml} file (Figure \ref{fig:ce-uml}). As introduced in Chapter \ref{ch:background}, the imported OSM data in SUMO is projected and translated using some parameters similarly to CE centring export feature. CE and SUMO use the same default projection settings but this is not the case with the translation offsets. Firstly, it was unknown to us that the \texttt{net.xml} contained a \texttt{location} which specifies exactly the translation offsets used to move all coordinates. Therefore, in order to find the lane's coordinates generated by SUMO in CE's coordinate system, we had to find some correlation between the objects. We know that OSM \texttt{way} objects are sometimes separated in more than one segments in CE. The same is valid for SUMO, so we could not use segments to calculate the necessary translation since more than one segment in CE have the same OSM ID. Then, we decided to take under consideration the nodes which are uniquely identifiable by their OSM ID values in both SUMO and CE. Overall, we searched for a the same node in CE and SUMO objects and calculated the difference in their coordinates. These values were then used to translate all SUMO object's coordinates. Moreover, we discovered that SUMO coordinates are rotated by \texttt{180$^{\circ}$} in comparison to CE coordinate system which had to be reversed before translation. This process was accelerated when we started using the offset values defined in \texttt{net.xml}'s node \texttt{location}.\\ 
+
 \begin{figure}[htb]
 	\centering
 	\includegraphics[width=0.9\textwidth]{figures/ce-uml}
 	\label{fig:ce-uml}
-	\caption{}
+	\caption{UML class diagram showing the \texttt{MMKGraphItem} hierarchy and other classes used by the \texttt{MMKExporter}.}
 \end{figure}
+
+Nonetheless, this was not the only incompatibility between the coordinates of CE and SUMO objects. Apparently, there algorithms which CE and SUMO employ to generate junctions' shapes posses very different features. In Figure \ref{fig:simply} and Figure \ref{fig:sumo-incon-1} we can see the same junction created by CE and SUMO. Moreover, Figure \ref{fig:sumo-incon-2} shows lanes's figures generated by SUMO next to their corresponding CE models. Clearly, SUMO tries to centre the streets joining in a junction according to their number of lanes. Since, we cannot interfere in the junction creation algorithm in SUMO, we tried to shift the street models in CE to be alined to SUMO's shapes. This is done in \texttt{prepareScene} method in \texttt{MMKExporter} by exploiting the CE's segments' \texttt{/ce/street/streetOffset} attribute. Firstly, we search for segments which are joining in a junction, then we subtract the number of forward and backward lanes. This value is then used to shift the current segment either left or right according to its orientation in the whole road network. As already mentioned, OSM \texttt{way} objectss can be split into more than one segments in CE and SUMO. Therefore it could happen that the number of corresponding edges in SUMO and segments in CE is not the same. Thus, it could happen that one SUMO edge is represented in CE by two adjacent segments (from which one is at the junction). Therefore, we have to propagate our shifting algorithm in all directions away from the junction for similar segments, \emph{i.e.} same number and kind of lanes, as well as hierarchy. As a result, we have achieved a cohesion between CE's and SUMO's shape generation process. However, there might be some cases which could not be handled because of the versatile nature of both softwares the user has to resolve inconsistencies by herself.\\
+
+\begin{figure}[htb]
+	\centering
+	\subfigure[] {
+	  \includegraphics[width=0.4\textwidth]{figures/sumo-incon-1}
+	  \label{fig:sumo-incon-1}
+	}%\hspace{0.05\textwidth} \hfill or \hspace{5mm} or \hspace{0.3\textwidth}
+	\subfigure[] {
+	  \includegraphics[width=0.5\textwidth]{figures/sumo-incon-2}
+	  \label{fig:sumo-incon-2}
+	}
+	\caption{Inconsistency between SUMO and CE junction creation.}
+\end{figure}
+
+Finally, we can start ordering the parsed lanes to their corresponding segments which is only possible because they share the same OSM ID values. However, this process can stumble upon yet another difference between SUMO's and CE's import process. Even after disabling all shape optimisation routines in CE, it might happen that some nodes are not imported but rather their corresponding segments are attached to another, neighbouring node. We can handle that by looking for nodes which are present in SUMO but missing in CE. Then, we find the nearest existing node in CE and attach to it the lane's information. However, this operation could be ambiguous because there could be more than one neighbouring nodes, so again the user has to fix inconsistencies. 
+
+In conclusion, we have managed to integrate SUMO generated road information into CE urban network. As a result, we can export this combined semantic road description data as a whole. In the next section we throughly describe the JSON export format which holds these data.
 
 \section{Format Description}
 \label{sec:format}
@@ -89,7 +113,8 @@ In the beginning of this project, there was an idea to export the street network
 
 In Listing \ref{lis:format-1} one can see a general overview of the used JSON format. Firstly, we define the \texttt{author}, \texttt{date} of the export and the name of the \texttt{project}. These can be also changed in the script to arbitrary values. The more crucial parts of the export are \texttt{nodes} and \texttt{segments}. Obviously, each of these arrays hold all of the nodes, respectively segments in the CE scene. Previously, in the Research project by Max Mauerer, next to these values, there were also the number of all elements. We have chosen to eliminate these values since every parsing process can count the elements in each array. Next, the JSON export contains the \texttt{offsets} of CE and SUMO which was applied to each vertex coordinates in order to compose one coherent scene. Then, we have the \texttt{connections} array which holds the information about all possible connections between lanes. This helps us to build a navigation system in next chapter. Lastly, \texttt{sceneObjects} hold vertex information about other other objects in the scene which have no direct connection to the road network, \emph{e.g.} buildings, parkings.\\
 
-	\begin{lstlisting}[language=json,firstnumber=1,caption={General overview of the used JSON format for description of road networks.},label={lis:format-1}]
+    \begin{scriptsize}
+	   \begin{lstlisting}[language=json,firstnumber=1,caption={General overview of the used JSON format for description of road networks.},label={lis:format-1}]
 {
     "author": "TUM - MMK",
     "connections": [(*@$\dots$@*)],
@@ -101,7 +126,8 @@ In Listing \ref{lis:format-1} one can see a general overview of the used JSON fo
     "sceneObjects": {(*@$\dots$@*)},
     "segments": [(*@$\dots$@*)]
 }
-	\end{lstlisting}
+	   \end{lstlisting}
+    \end{scriptsize}
 
 A sample \texttt{node} value can be seen in Listing \ref{lis:format-node}. Firstly, we define its hierarchy which is defined by SUMO and can be one of these values: \emph{unknown}, \emph{priority} or \emph{traffic\_light} depending on the kind of node. Secondly, each node holds information about every lane which is part of it. Next, we find two id values in the export: \emph{id} is the \texttt{OID} value generated by CE and \emph{osm} is obviously its OSM ID. Each node's neighbouring segments are also referenced in the export by their id values. A node can have zero or more shapes which properties can be found in the \texttt{shapes} array. Additionally, each shape has again two kind of id values (identical to the node's ids). Finally, the coordinates of each node are kept in the \texttt{vertices} key.\\
  	
@@ -244,7 +270,7 @@ To summarise, the resulting export file with all of its features described in th
 
 \section{Unity Import}
 
-Implementation details - UML
+
 \begin{figure}[htb]
 	\centering
 	\includegraphics[width=0.9\textwidth]{figures/unity-uml}
