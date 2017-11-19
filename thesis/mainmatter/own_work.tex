@@ -62,8 +62,8 @@ Another setting which could alter the shape generation process in a negative way
 Our first approach to create a semantic description of the road network in CE generated using OSM data involves completely ignoring the imported parameters in CE. We still have to export the vertices related to the CE's shapes using the CE's Python interface but all of the information about a given street segment such as number of lanes or speed limits will be directly taken from the OSM export file. The biggest advantage of this approach is that we can accomplish the \texttt{xml}-parsing in Python 3 which might be more performant than using the Jython interface in CE to read all of the attributes. Although this is generally true, we would break the export functionality in two big modules which are highly coherent and belong in one place. Moreover, there was another obstacle which seemed crucial for the success of this approach. CE does place almost (actually this causes yet another problem which will be discussed later in this section) every OSM node on its correct place and uses its original OSM ID, but this is not the case with segments. According to the shape of a given way (which is determined by its nodes), CE decides in how many actual segments to partition it. In other words, it may happen that one \texttt{way} object has more than one corresponding segments in the CE scene. Unfortunately, this introduces unnecessary difficulties in reconstructing a way from its segments which would be later crucial for the lane generation. Therefore, this first approach was abandoned in favour of a script purely implemented in the CE's Jython environment which depends on the imported attributes in CE from OSM to reconstruct each object's behaviour. 
 
 \subsection{CE Export}
-	Explain the whole CE export without lanes including translation\\
-	Implementation details - UML
+	- Explain the whole CE export without lanes including translation\\
+	- Implementation details - UML
 
 \begin{figure}[htb]
 	\centering
@@ -73,7 +73,7 @@ Our first approach to create a semantic description of the road network in CE ge
 \end{figure}
 
 \subsection{Additional Information from SUMO}
-Synchronisation between CE and SUMO - lanes, node search, offset search (location kurzweg)
+- Synchronisation between CE and SUMO - lanes, node search, offset search (location kurzweg)
 \begin{figure}[htb]
 	\centering
 	\includegraphics[width=0.9\textwidth]{figures/ce-uml}
@@ -248,13 +248,41 @@ Implementation details - UML
 \begin{figure}[htb]
 	\centering
 	\includegraphics[width=0.9\textwidth]{figures/unity-uml}
-	\label{fig:ce-overview-uml}
+	\label{fig:unity-uml}
 	\caption{}
 \end{figure}
 
-\chapter{Car Routing Algorithm}
+\chapter{Routing}
 \label{ch:gps}
 
-\section{Overview}
-\section{Dijkstra Algorithm}
+There are many applications of the semantic road description which can be used to improve the usability of the MMK Driving Simulator. One such application is navigation which we will discuss in this chapter. In Figure \ref{fig:nav} one can see a vehicle (above, right) which wants to reach the blue point (down, right). Utilising the connectivity of the lanes derived by SUMO, as explained in previous chapter, we can calculate the shortest possible path. This path is shown in the figure using red dots. Moreover, one can see that we have included to the path the \texttt{via} lanes, too. In the following, we describe the employed algorithms to calculate an ordered list of points which a vehicle has to follow in order to reach a predefined destination. Additionally, we discuss our design decisions, as well as some limitations which were recognised during development.
+
+\begin{figure}[htb]
+	\centering
+	\includegraphics[width=0.9\textwidth]{figures/nav}
+	\label{fig:nav}
+	\caption{MMK Car, above right and the calculated shortest path (red) to a predefined user destination (down right, blue).}
+\end{figure}
+\section{Routing Algorithm}
+Currently, there exist many algorithms able to calculate the shortest path between two points, \emph{e.g.} Dijkstra, Bellman-Ford, A*. Some of these algorithms work under special conditions, \emph{e.g.} Dijkstra can be applied to graphs where no edge has negative weight. On the other hand Bellman-Ford is more versatile, as it is capable of handling graphs in which some of the edge weights are negative numbers. Since in our graph there are only edges with positive weights, we decided to choose Dijkstra for our implementation.
+
+Dijkstra's algorithm is a shortest-path algorithm that iteratively searches from a start node \emph{s} to a target note \emph{t}\cite{skiena1998algorithm}. From a currently visited node \emph{v}, all neighbouring, unvisited nodes get a weight set based on the edge weights. Each node encountered gets a weight \emph{w} assigned which denotes the distance from \emph{s} to this node via the current node \emph{v}. If a node already has a weight, it is only changed if the new weight would be lower, ensuring an optimal solution.
+The algorithm forms a circle around the start node, with a radius increasing in each step. The search can be stopped once \emph{t} has been visited. The resulting path is the shortest path from \emph{s} to \emph{t}.
+
 \section{Implementation Details}
+First of all, we have to build a graph from the connectivity information in order to apply Dijkstra to it and calculate the shortest path between two points. However, this cannot be done in a straightforward way because in this case the nodes of the graph are the actual lanes and the connections are links between them which have no length. Of course, some connections have "via" lanes which can be used to calculate the distance between two lanes but this cannot be applied everywhere. Moreover, in order a vehicle to drive from the start of a given lane A to the start of another, adjacent to A, lane B, it has to drive through the whole lane A. This intuition helped us to design the actual graph. Since links between lanes do not provide wighting information (apart from the sum of the length of via lanes if they are present), we defined \textbf{the weight of an edge} connecting given lane A and lane B (in the direction from lane A to lane B) as the \textbf{length of lane A}. Since, there is no connectivity information for neighbouring lanes, we do not consider these connections.
+
+After designing the graph, we have to decide its representation in memory. There are many possibilities to achieve this, \emph{e.g.} adjacency matrix, edge list, adjacency array/list. The most crucial part of the Dijkstra algorithm as already explained is the finding of neighbouring nodes, which has to be done in an efficient way. Therefore, we have chosen to utilise an adjacency list to hold the graph information. Additionally, we implemented a special object \texttt{NetworkLaneConnection} (Figure \ref{fig:unity-uml}). In the \texttt{Network} class, using the \texttt{BuildConnectivityGraph(\_:\;JSONNode)} method we parse all connections defined in the semantic road description export file. Firstly, we initialise a data structure to store all \texttt{NetworkLaneConnection} objects. Each object in has, as can be seen in Figure \ref{fig:unity-uml}, a lane object and a list with all adjacent to it other lanes. Next, for every connection between two lanes, we either create a new \texttt{NetworkLaneConnection} using the \texttt{fromLane} and \texttt{toLane} as respectively the \texttt{lane} attribute and the first lane in the adjacentLanes list. Otherwise, the corresponding \texttt{NetworkLaneConnection} object with the current lane already exists and we just have to store the \texttt{toLane} to the list of adjacent lanes. Additionally, we store all \texttt{via} lanes to the corresponding destination lanes.
+
+Next, we implemented Dijkstra in the \texttt{Network} class which calculates the shortest path between two lanes given their id values. Additionally, we used the \texttt{SimplePriorityQueue} class presented in Chapter \ref{ch:background}. The id values of the start and destination lane were calculated using the \texttt{RoadPosition} method detailed in Chapter \ref{ch:descriptionOfRoadSystems}. There are two requirements, which has to be fulfilled in order to start the algorithm. Firstly, the vehicle has to be on a valid lane and secondly, the destination point has to lay again on a valid lane. Using the id values of the start and destination lane, we can invoke the \texttt{CalculateRoute} method in \texttt{Network} class. The result is a list of \texttt{NetworkLanes} which have to be traversed in order a vehicle to reach the desired destination. If there is no route found or some of the aforementioned two requirements is not valid, then the method returns \texttt{null}. Nonetheless, this is not the result we wanted in the beginning because the vehicle awaits from us an ordered list of navigation points which it can follow.\\
+
+\begin{figure}[htb]
+	\centering
+	\includegraphics[width=0.9\textwidth]{figures/navpoints}
+	\label{fig:navpoints}
+	\caption{Given a path of lanes (direction from A via B to C) and the coordinates of the vehicle at the start (green point) and the destination (blue point), we use the \emph{dot} product to calculate which points have to be excluded from the final path.}
+\end{figure}
+
+Lastly, we have to collect all points which construct each lane on the calculated shortest path. Generally, there are two cases where different lanes has to be handled separately: (1) the first and the last lane, (2) all lanes between them. Since the vehicle does not necessarily start driving through the given route from the start of the first lane, where it is currently situated, we have to exclude all lane points which are "before" the vehicle. Similarly, all points "after" the destination coordinates has to be discarded from the route. An example is shown in Figure \ref{fig:navpoints}, where the green point represents the vehicle, while the blue point is the destination. There are three lanes (A, B, and C), which starts and ends are represented by bigger red dots, and each point on the every lane is a smaller red dot. As we can see, the vehicle is already after the first three points on the start lane, so they don't have to be included in the navigation route. In order to determine which points has to be excluded from the path, we start in the beginning of the first lane and for each point on it we calculate the \emph{dot} product between the vector built by the current point and the vehicle coordinates and the vector built by the current point and the next point on the lane. If the resulting value is negative, \emph{i.e.} the angle between the two vertices is larger than \texttt{90$^{\circ}$}, then this point is excluded from the list. Analogously, the same operation is performed for the destination coordinates.
+
+To summarise, in this chapter we designed a graph from the lane connectivity information provided by SUMO and implemented a routing algorithm in order to determine the shortest path between a given start and destination. 
