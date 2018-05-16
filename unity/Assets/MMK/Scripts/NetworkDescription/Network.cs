@@ -11,22 +11,19 @@ namespace MMK.NetworkDescription
 		{
 				private enum NetworkComponentType { Edge, Node };
 
-				string m_Path = "Path_To_Export";
+				public TextAsset jsonData;
 				private Dictionary<string , GameObject> networkItems = new Dictionary<string , GameObject> ();
 
 				private Dictionary<string, NetworkLaneConnection> connectivityGraph = new Dictionary<string, NetworkLaneConnection> ();
 				private Dictionary<string , NetworkLane> lanes = new Dictionary<string , NetworkLane> ();
+				private float xOffset, yOffset;
 
 				void Start ()
 				{
-						string jsonExport;
-						using (StreamReader r = new StreamReader (m_Path)) {
-								jsonExport = r.ReadToEnd ();
-						}
-
-						var json = JSON.Parse (jsonExport);
+						var json = JSON.Parse (jsonData.ToString());
 						BuildNetwork (json);
 						BuildConnectivityGraph (json);
+						GetOffsets(json);
 				}
 
 				public NetworkItem GetNetworkItemByID (string id)
@@ -104,6 +101,12 @@ namespace MMK.NetworkDescription
 										connectivityGraph.Add (toLaneID, new NetworkLaneConnection (toLane));
 								}
 						}
+				}
+
+				private void GetOffsets(JSONNode root)
+				{
+					xOffset = root["offsets"]["sumo"]["x"].AsFloat;
+					yOffset = root["offsets"]["sumo"]["z"].AsFloat;
 				}
 
 				private GameObject CreateGameObject (NetworkComponentType type, JSONNode jsonData, GameObject parent)
@@ -195,6 +198,20 @@ namespace MMK.NetworkDescription
 						route.Reverse ();
 
 						return route;
+				}
+
+				public Vector3 ConvertSumoCoordinatesToUnity(float sumoPositionX, float sumoPositionY, float gameObjectHeight)
+				{
+					float x = -sumoPositionX + xOffset;
+					float y = gameObjectHeight / 2;
+					float z = -sumoPositionY + yOffset;
+
+					return new Vector3(x, y, z);
+				}
+
+				public float ConvertSumoAngleToUnity(float angle)
+				{
+					return (angle + 180.0f);
 				}
 		}
 }
