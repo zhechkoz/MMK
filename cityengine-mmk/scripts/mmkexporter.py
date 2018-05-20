@@ -130,8 +130,11 @@ class MMKExporter(object):
             fromLane = connectionAttrib['from'] + '_' + connectionAttrib['fromLane']
             toLane = connectionAttrib['to'] + '_' + connectionAttrib['toLane']
             via = connectionAttrib.get('via', None)
+            trafficLight = connectionAttrib.get('tl', None)
+            trafficLightIndex = connectionAttrib.get('linkIndex', None)
+            direction = connectionAttrib.get('dir', None)
 
-            connectionObject = SUMOGraphConnection(id, fromLane, toLane, via)
+            connectionObject = SUMOGraphConnection(id, fromLane, toLane, via, trafficLight, trafficLightIndex, direction)
             connections.append(connectionObject)
             id += 1
         return connections
@@ -341,7 +344,7 @@ if __name__ == '__main__':
     sumo = 'data/tum-sanitized.net.xml'
 
     # Define export center coordinates; These has to be the same
-    # as in the "Export Models..." dialog in CityEngine.
+    # as in the "Export Models..." dialoge in CityEngine.
     ox = -690985
     oz = 5336220
     

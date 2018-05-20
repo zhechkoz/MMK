@@ -25,16 +25,22 @@ class SUMOGraph(object):
 
 
 class SUMOGraphConnection(object):
-    def __init__(self, id, fromLane, toLane, via):
+    def __init__(self, id, fromLane, toLane, via, trafficLight = None, trafficLightIndex = None, direction = None):
         self.id = id
         self.fromLane = fromLane
         self.toLane = toLane
         self.via = via.split(' ') if via else []
+        self.trafficLight = trafficLight
+        self.trafficLightIndex = trafficLightIndex
+        self.direction = direction
 
     def reprJSON(self):
         dict = { 'id' : self.id,
                  'fromLane' : self.fromLane,
-                 'toLane' : self.toLane
+                 'toLane' : self.toLane,
+                 'trafficLight' : self.trafficLight,
+                 'trafficLightIndex' : self.trafficLightIndex,
+                 'direction' : self.direction
         }
 
         dict.update({'via' : self.via} if self.via else {})
